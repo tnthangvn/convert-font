@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Internal WOFF font tool — load, create, and generate .woff font files from SVG glyphs">
+  <title>WOFF Tool — Font Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header__brand">
+        <svg class="header__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 7V4h16v3"/>
+          <path d="M9 20h6"/>
+          <path d="M12 4v16"/>
+        </svg>
+        <h1 class="header__title">WOFF Tool</h1>
+      </div>
+      <span class="header__badge">v1</span>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+
+      <!-- Step: Start Mode -->
+      <section id="startSection" class="section section--start">
+        <h2 class="section__heading">Get Started</h2>
+        <p class="section__desc">Open an existing <code>.woff</code> file or create a new font set from scratch.</p>
+        <div class="start-actions">
+          <button id="btnOpenWoff" class="btn btn--primary btn--lg" type="button">
+            <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/>
+            </svg>
+            Open .woff
+          </button>
+          <button id="btnCreateNew" class="btn btn--secondary btn--lg" type="button">
+            <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/>
+            </svg>
+            Create New
+          </button>
+        </div>
+        <input type="file" id="woffInput" accept=".woff" hidden>
+      </section>
+
+      <!-- Step: Workspace -->
+      <section id="workspaceSection" class="section section--workspace hidden">
+        <!-- Font info bar -->
+        <div class="workspace-bar">
+          <div class="workspace-bar__info">
+            <span id="fontNameDisplay" class="workspace-bar__name">New Font</span>
+            <span id="glyphCountBadge" class="badge">0 glyphs</span>
+          </div>
+          <div class="workspace-bar__actions">
+            <button id="btnBackToStart" class="btn btn--ghost btn--sm" type="button">
+              <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
+              </svg>
+              Back
+            </button>
+          </div>
+        </div>
+
+        <!-- Font name input -->
+        <div class="form-group">
+          <label for="fontNameInput" class="form-label">Font Name</label>
+          <input type="text" id="fontNameInput" class="form-input" value="CustomFont" placeholder="Enter font name...">
+        </div>
+
+        <!-- Upload Zone -->
+        <div id="dropZone" class="drop-zone">
+          <svg class="drop-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="17,8 12,3 7,8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="drop-zone__text">Drop <code>.svg</code> files here or <button type="button" id="btnBrowseSvg" class="drop-zone__link">browse</button></p>
+          <p class="drop-zone__hint">Accepts multiple SVG files</p>
+          <input type="file" id="svgInput" accept=".svg" multiple hidden>
+        </div>
+
+        <!-- Glyph List -->
+        <div id="glyphListWrapper" class="glyph-list-wrapper hidden">
+          <h3 class="glyph-list__title">Glyphs</h3>
+          <div id="glyphList" class="glyph-list"></div>
+        </div>
+
+        <!-- Generate Actions -->
+        <div id="generateActions" class="generate-actions hidden">
+          <button id="btnGenerate" class="btn btn--accent btn--lg btn--full" type="button">
+            <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>
+            </svg>
+            Generate .woff
+          </button>
+        </div>
+
+        <!-- Status / Progress -->
+        <div id="statusBar" class="status-bar hidden">
+          <div class="status-bar__spinner"></div>
+          <span id="statusText" class="status-bar__text">Generating...</span>
+        </div>
+
+        <!-- Error display -->
+        <div id="errorBar" class="error-bar hidden">
+          <svg class="error-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span id="errorText" class="error-bar__text"></span>
+          <button id="btnDismissError" class="error-bar__dismiss" type="button">&times;</button>
+        </div>
+
+        <!-- Download -->
+        <div id="downloadSection" class="download-section hidden">
+          <div class="download-card">
+            <svg class="download-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+              <polyline points="7,10 12,15 17,10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <div class="download-card__info">
+              <span id="downloadFileName" class="download-card__name">CustomFont.woff</span>
+              <span id="downloadFileSize" class="download-card__size"></span>
+            </div>
+            <button id="btnDownload" class="btn btn--primary btn--sm" type="button">Download</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>Internal Tool &middot; WOFF Font Generator</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

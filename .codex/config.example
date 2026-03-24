@@ -1,0 +1,26 @@
+# .codex/config.toml
+model = "gpt-5.4"
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = true
+
+
+[mcp_servers.figma]
+command = "/Users/nt/.nvm/versions/node/v22.14.0/bin/node"
+args = ["/Users/nt/.nvm/versions/node/v22.14.0/bin/figma-developer-mcp", "--stdio", "--figma-api-key", ""]
+enabled = true
+startup_timeout_sec = 60
+
+[mcp_servers.filesystem]
+command = "/Users/nt/.nvm/versions/node/v22.14.0/bin/node"
+args = [
+  "/var/www/mcp/figma-serve/src/filesystem/dist/index.js",
+  "/var/www/rongviet/rongviet-frontend",
+]
+enabled = true
+startup_timeout_sec = 20
+
+[mcp_servers.filesystem.env]
+PATH = "/Users/nt/.nvm/versions/node/v22.14.0/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"

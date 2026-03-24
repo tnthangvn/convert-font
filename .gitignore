@@ -1,0 +1,6 @@
+.gitnexus
+node_modules
+dist
+build
+.dist
+.build
