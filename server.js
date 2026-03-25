@@ -6,6 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const { Readable } = require('stream');
 const opentype = require('opentype.js');
+const { buildCssText } = require('./lib/build-css');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
@@ -34,15 +35,24 @@ function sanitizeGlyphName(filename) {
  */
 function parseWoff(buffer) {
   const font = opentype.parse(buffer.buffer, { lowMemory: false });
+  const ascender = font.ascender || font.unitsPerEm * 0.8;
   const glyphs = [];
   for (let i = 0; i < font.glyphs.length; i++) {
     const g = font.glyphs.get(i);
     if (!g.unicode && g.index !== 0) continue;
     // Convert glyph path to SVG path data
+    // Position baseline at y = ascender so the glyph fits within viewBox(0 0 upm upm)
     let svgPath = '';
     try {
-      const p = g.getPath(0, 0, font.unitsPerEm || 1000);
-      svgPath = p.toSVG ? p.toSVG() : (p.toPathData ? p.toPathData() : '');
+      const p = g.getPath(0, ascender, font.unitsPerEm || 1000);
+      if (p.toPathData) {
+        svgPath = p.toPathData();
+      } else if (p.toSVG) {
+        // toSVG returns '<path d="..."/>', extract just the d attribute
+        const svgStr = p.toSVG();
+        const match = svgStr.match(/d="([^"]*)"/); 
+        svgPath = match ? match[1] : '';
+      }
     } catch (_) { /* ignore */ }
     glyphs.push({
       index: g.index,
@@ -56,6 +66,7 @@ function parseWoff(buffer) {
   return {
     fontFamily: font.names?.fontFamily?.en || font.names?.fontFamily || 'Unknown',
     unitsPerEm: font.unitsPerEm,
+    ascender,
     numGlyphs: font.glyphs.length,
     glyphs,
   };
@@ -65,7 +76,7 @@ function parseWoff(buffer) {
  * Generate .woff buffer from SVG content strings + optional existing glyphs.
  * Pipeline: svgicons2svgfont → svg2ttf → ttf2woff
  */
-async function generateWoff(svgItems, fontName = 'CustomFont', existingWoffBuffer = null) {
+async function generateWoff(svgItems, fontName = 'CustomFont', existingWoffBuffer = null, glyphMeta = null) {
   // Dynamic imports for ESM-only packages
   const { SVGIcons2SVGFontStream } = await import('svgicons2svgfont');
   const svg2ttf = (await import('svg2ttf')).default;
@@ -74,36 +85,49 @@ async function generateWoff(svgItems, fontName = 'CustomFont', existingWoffBuffe
   // Determine starting codepoint (Private Use Area)
   let nextCodepoint = 0xE001;
 
-  // If we have an existing WOFF, extract glyphs and merge
+  // If glyphMeta is provided, the client is sending the full ordered list
+  // with user-defined names and codepoints
   const allSvgItems = [];
 
-  if (existingWoffBuffer) {
-    const parsed = parseWoff(existingWoffBuffer);
-    fontName = fontName || parsed.fontFamily || 'CustomFont';
-    // Re-create SVG for each existing glyph with a path
-    for (const g of parsed.glyphs) {
-      if (!g.svgPathData || g.index === 0) continue;
-      const cp = g.unicode || nextCodepoint++;
-      if (cp >= nextCodepoint) nextCodepoint = cp + 1;
-      const unitsPerEm = parsed.unitsPerEm || 1000;
-      const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${unitsPerEm} ${unitsPerEm}">
-  <path d="${g.svgPathData}"/>
-</svg>`;
+  if (glyphMeta && Array.isArray(glyphMeta) && glyphMeta.length > 0) {
+    // Client controls everything — use glyphMeta order/names/codepoints
+    for (const meta of glyphMeta) {
+      const svgContent = meta.svgContent;
+      if (!svgContent) continue;
       allSvgItems.push({
-        name: g.name,
-        codepoint: cp,
+        name: meta.name || 'glyph',
+        codepoint: meta.codepoint || nextCodepoint++,
         svgContent,
       });
     }
-  }
+  } else {
+    // Legacy path: auto-assign codepoints
+    if (existingWoffBuffer) {
+      const parsed = parseWoff(existingWoffBuffer);
+      fontName = fontName || parsed.fontFamily || 'CustomFont';
+      for (const g of parsed.glyphs) {
+        if (!g.svgPathData || g.index === 0) continue;
+        const cp = g.unicode || nextCodepoint++;
+        if (cp >= nextCodepoint) nextCodepoint = cp + 1;
+        const unitsPerEm = parsed.unitsPerEm || 1000;
+        const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${unitsPerEm} ${unitsPerEm}">
+  <path d="${g.svgPathData}"/>
+</svg>`;
+        allSvgItems.push({
+          name: g.name,
+          codepoint: cp,
+          svgContent,
+        });
+      }
+    }
 
-  // Add new SVGs with sequential codepoints
-  for (const item of svgItems) {
-    allSvgItems.push({
-      name: item.name,
-      codepoint: nextCodepoint++,
-      svgContent: item.svgContent,
-    });
+    for (const item of svgItems) {
+      allSvgItems.push({
+        name: item.name,
+        codepoint: nextCodepoint++,
+        svgContent: item.svgContent,
+      });
+    }
   }
 
   if (allSvgItems.length === 0) {
@@ -193,7 +217,28 @@ app.post('/api/generate', upload.fields([
     const woffFiles = req.files?.woffFile || [];
     const fontName = req.body?.fontName || 'CustomFont';
 
-    // Validate SVGs
+    // Check if client sent glyphMeta (new path)
+    let glyphMeta = null;
+    if (req.body?.glyphMeta) {
+      try {
+        glyphMeta = JSON.parse(req.body.glyphMeta);
+      } catch (_) {
+        return res.status(400).json({ error: 'Invalid glyphMeta JSON.' });
+      }
+    }
+
+    // If glyphMeta is provided, it contains all the SVG content inline
+    if (glyphMeta && glyphMeta.length > 0) {
+      const woffBuffer = await generateWoff([], fontName, null, glyphMeta);
+      res.set({
+        'Content-Type': 'font/woff',
+        'Content-Disposition': `attachment; filename="${fontName}.woff"`,
+        'Content-Length': woffBuffer.length,
+      });
+      return res.send(woffBuffer);
+    }
+
+    // Legacy path: SVG files uploaded
     if (svgFiles.length === 0) {
       return res.status(400).json({ error: 'At least one .svg file is required.' });
     }
@@ -259,11 +304,42 @@ app.post('/api/generate', upload.fields([
   }
 });
 
+/**
+ * POST /api/generate-css
+ * Generates a CSS file for icon font usage.
+ * Body JSON: { fontFamily, prefix, fontPath, glyphs: [{ name, codepoint }] }
+ */
+app.post('/api/generate-css', express.json(), (req, res) => {
+  try {
+    const { fontFamily = 'CustomFont', prefix = 'icon', fontPath = 'fonts/font.woff', glyphs = [] } = req.body;
+
+    if (!glyphs || glyphs.length === 0) {
+      return res.status(400).json({ error: 'No glyphs provided for CSS generation.' });
+    }
+
+    const css = buildCssText({ fontFamily, prefix, fontPath, glyphs });
+
+    res.set({
+      'Content-Type': 'text/css; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${fontFamily}.css"`,
+    });
+    res.send(css);
+  } catch (err) {
+    console.error('generate-css error:', err);
+    res.status(500).json({ error: `CSS generation failed: ${err.message}` });
+  }
+});
+
 // ── Serve SPA ────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`✨ WOFF Tool running at http://localhost:${PORT}`);
-});
+// Only start the server when run directly (allows testing without port binding)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`✨ WOFF Tool running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = { app, buildCssText };

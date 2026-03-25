@@ -363,7 +363,7 @@ code {
 
 .glyph-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 10px;
 }
 
@@ -371,7 +371,7 @@ code {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px 8px 10px;
+  padding: 14px 8px 10px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -388,8 +388,8 @@ code {
 }
 
 .glyph-card__preview {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -402,19 +402,77 @@ code {
   height: 100%;
 }
 
+/* ── Glyph Card: Name row with edit hint ─────────────── */
+.glyph-card__name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+}
+
 .glyph-card__name {
   font-size: 0.7rem;
-  color: var(--text-dim);
+  color: var(--text);
   text-align: center;
   word-break: break-all;
   line-height: 1.3;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.glyph-card__name:hover {
+  color: var(--accent-hover);
+}
+
+.glyph-card__edit-hint {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  opacity: 0;
+  transition: opacity var(--transition);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.glyph-card:hover .glyph-card__edit-hint {
+  opacity: 0.7;
+}
+
+.glyph-card__edit-hint:hover {
+  opacity: 1 !important;
+  color: var(--accent);
 }
 
 .glyph-card__unicode {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   color: var(--accent);
   font-family: 'SF Mono', 'Fira Code', monospace;
   margin-top: 2px;
+}
+
+/* ── Glyph Card: CSS metadata ────────────────────────── */
+.glyph-card__css-content {
+  font-size: 0.55rem;
+  color: var(--text-dim);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  margin-top: 3px;
+  text-align: center;
+  line-height: 1.2;
+  opacity: 0.8;
+}
+
+.glyph-card__css-selector {
+  font-size: 0.55rem;
+  color: var(--primary-hover);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  margin-top: 2px;
+  text-align: center;
+  word-break: break-all;
+  line-height: 1.2;
+  opacity: 0.7;
+  background: rgba(99, 102, 241, 0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
 }
 
 .glyph-card__remove {
@@ -445,9 +503,221 @@ code {
   border-color: rgba(139, 92, 246, 0.15);
 }
 
+.glyph-card--dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+
+.glyph-card--dragover {
+  border-color: var(--accent) !important;
+  background: rgba(139, 92, 246, 0.1);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+  transform: translateY(-2px);
+}
+
+.glyph-card__drag-handle {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 10px;
+  color: var(--text-dim);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity var(--transition);
+  line-height: 1;
+  user-select: none;
+}
+
+.glyph-card:hover .glyph-card__drag-handle {
+  opacity: 0.6;
+}
+
+.glyph-card__index {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.55rem;
+  color: var(--text-dim);
+  font-weight: 600;
+  opacity: 0.5;
+}
+
+.glyph-card__name-input {
+  width: 100%;
+  font-size: 0.7rem;
+  font-family: var(--font);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 4px;
+  text-align: center;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
+}
+
+/* ── Glyph Toolbar ──────────────────────────────────── */
+.glyph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  backdrop-filter: blur(12px);
+}
+
+.glyph-toolbar__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.glyph-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.glyph-toolbar__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* ── CSS Config ─────────────────────────────────────── */
+.css-config {
+  margin-bottom: 16px;
+}
+
+.css-config__row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.css-config__field {
+  flex: 1;
+  max-width: 200px;
+}
+
+/* ── CSS Preview Panel ──────────────────────────────── */
+.css-preview {
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+  animation: fadeIn 0.3s ease;
+}
+
+.css-preview__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.css-preview__title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.css-preview__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.css-preview__hint {
+  padding: 8px 16px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.css-preview__hint strong {
+  color: var(--text-muted);
+}
+
+.css-preview__code {
+  margin: 0;
+  padding: 16px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 0;
+}
+
+.css-preview__code code {
+  display: block;
+  font-size: 0.78rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #c4b5fd;
+  background: transparent;
+  padding: 0;
+  white-space: pre;
+  line-height: 1.6;
+}
+
+.css-preview__code--stale code {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Custom scrollbar for the code block */
+.css-preview__code::-webkit-scrollbar {
+  width: 6px;
+}
+
+.css-preview__code::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.css-preview__code::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 3px;
+}
+
+.css-preview__code::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.5);
+}
+
+/* ── Form small variant ─────────────────────────────── */
+.form-input--sm {
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  max-width: 100px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 /* ── Generate Actions ────────────────────────────────── */
 .generate-actions {
   margin-bottom: 16px;
+}
+
+.generate-actions__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.btn--flex {
+  width: 100%;
 }
 
 /* ── Status Bar ──────────────────────────────────────── */
@@ -554,6 +824,12 @@ code {
   color: var(--text-dim);
 }
 
+.download-card__buttons {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 /* ── Footer ──────────────────────────────────────────── */
 .footer {
   padding: 20px 0;
@@ -593,7 +869,26 @@ code {
   }
 
   .glyph-list {
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  }
+
+  .glyph-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .generate-actions__row {
+    grid-template-columns: 1fr;
+  }
+
+  .download-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .download-card__buttons {
+    width: 100%;
+    flex-direction: column;
   }
 
   .header__title {
@@ -604,5 +899,15 @@ code {
     flex-direction: column;
     gap: 10px;
     align-items: flex-start;
+  }
+
+  .css-preview__header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .css-preview__code {
+    max-height: 240px;
   }
 }

@@ -20,8 +20,18 @@ Open [http://localhost:3456](http://localhost:3456) in your browser.
 1. **Open .woff** — load an existing `.woff` file to view/extend its glyphs
 2. **Create New** — start a blank font set
 3. **Add SVGs** — drag & drop or browse for `.svg` files (multiple supported)
-4. **Generate** — click "Generate .woff" to produce the output
-5. **Download** — save the generated `.woff` file
+4. **Rename glyphs** — click any glyph title to rename it inline
+5. **Sort by name** — sort glyphs alphabetically and re-index codepoints
+6. **Re-index** — manually reassign codepoints from a custom start value
+7. **Preview CSS** — view the generated CSS on-page before downloading
+8. **Generate** — click "Generate .woff" to produce the output
+9. **Download** — save the generated `.woff` and `.css` files
+
+## Testing
+
+```bash
+npm test
+```
 
 ## Dependencies (all MIT)
 

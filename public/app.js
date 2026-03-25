@@ -3,14 +3,19 @@
   'use strict';
 
   // ── State ──────────────────────────────────────────────
+  let _idCounter = 0;
   const state = {
     mode: 'start', // 'start' | 'workspace'
     existingWoffFile: null,    // File object (original .woff)
-    existingGlyphs: [],        // parsed glyphs from existing .woff
-    newSvgFiles: [],           // { file: File, name: string, svgContent: string }
+    glyphs: [],                // unified: { id, name, codepoint, svgContent, svgPathData, isNew, file, unitsPerEm }
     generatedBlob: null,
     fontName: 'CustomFont',
+    codepointStart: 0xE001,
+    cssPrefix: 'icon',
+    cssPreviewText: null,      // cached CSS preview text (invalidated on changes)
   };
+
+  function nextId() { return ++_idCounter; }
 
   // ── DOM Refs ───────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
@@ -30,6 +35,7 @@
   const glyphList = $('#glyphList');
   const generateActions = $('#generateActions');
   const btnGenerate = $('#btnGenerate');
+  const btnExportCss = $('#btnExportCss');
   const statusBar = $('#statusBar');
   const statusText = $('#statusText');
   const errorBar = $('#errorBar');
@@ -39,10 +45,21 @@
   const downloadFileName = $('#downloadFileName');
   const downloadFileSize = $('#downloadFileSize');
   const btnDownload = $('#btnDownload');
+  const btnDownloadCss = $('#btnDownloadCss');
+  const codepointStartInput = $('#codepointStartInput');
+  const cssPrefixInput = $('#cssPrefixInput');
+  const btnSortAZ = $('#btnSortAZ');
+  const btnReindex = $('#btnReindex');
+  const glyphToolbar = $('#glyphToolbar');
+  const cssConfigSection = $('#cssConfigSection');
+  const cssPreviewSection = $('#cssPreviewSection');
+  const cssPreviewCode = $('#cssPreviewCode');
+  const btnPreviewCss = $('#btnPreviewCss');
+  const btnCopyCss = $('#btnCopyCss');
 
   // ── Helpers ────────────────────────────────────────────
-  function show(el) { el.classList.remove('hidden'); }
-  function hide(el) { el.classList.add('hidden'); }
+  function show(el) { if (el) el.classList.remove('hidden'); }
+  function hide(el) { if (el) el.classList.add('hidden'); }
 
   function showError(msg) {
     errorText.textContent = msg;
@@ -61,14 +78,31 @@
     return filename.replace(/\.svg$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_').replace(/^_+|_+$/g, '') || 'glyph';
   }
 
+  function codepointToHex(cp) {
+    return cp ? cp.toString(16).toUpperCase().padStart(4, '0') : '----';
+  }
+
+  function codepointToCssEscape(cp) {
+    return cp ? `\\${cp.toString(16).toLowerCase()}` : '';
+  }
+
+  /** Invalidate the cached CSS preview so the user knows it needs a refresh. */
+  function invalidateCssPreview() {
+    state.cssPreviewText = null;
+    if (cssPreviewCode) {
+      cssPreviewCode.innerHTML = '<code>/* Preview outdated — click "Preview CSS" to refresh */</code>';
+      cssPreviewCode.classList.add('css-preview__code--stale');
+    }
+  }
+
   // ── Navigation ─────────────────────────────────────────
   function goToStart() {
     state.mode = 'start';
     state.existingWoffFile = null;
-    state.existingGlyphs = [];
-    state.newSvgFiles = [];
+    state.glyphs = [];
     state.generatedBlob = null;
     state.fontName = 'CustomFont';
+    state.cssPreviewText = null;
     fontNameInput.value = 'CustomFont';
 
     show(startSection);
@@ -81,11 +115,27 @@
   function goToWorkspace(fontName, existingGlyphs) {
     state.mode = 'workspace';
     state.fontName = fontName || 'CustomFont';
-    state.existingGlyphs = existingGlyphs || [];
     state.generatedBlob = null;
+    state.cssPreviewText = null;
+
+    // Convert existing glyphs into unified format
+    if (existingGlyphs && existingGlyphs.length > 0) {
+      state.glyphs = existingGlyphs.map(g => ({
+        id: nextId(),
+        name: g.name || `glyph_${g.index}`,
+        codepoint: g.unicode || null,
+        svgContent: g.svgPathData ? buildSvgFromPath(g.svgPathData, g.unitsPerEm || 1000) : null,
+        svgPathData: g.svgPathData,
+        isNew: false,
+        file: null,
+        unitsPerEm: g.unitsPerEm || 1000,
+      })).filter(g => g.svgContent || g.svgPathData);
+    }
 
     fontNameInput.value = state.fontName;
     fontNameDisplay.textContent = state.fontName;
+    codepointStartInput.value = state.codepointStart.toString(16).toUpperCase();
+    cssPrefixInput.value = state.cssPrefix;
 
     hide(startSection);
     show(workspaceSection);
@@ -93,98 +143,207 @@
     hide(statusBar);
     hide(downloadSection);
 
+    // Auto re-index if there are glyphs without codepoints
+    if (state.glyphs.some(g => !g.codepoint)) {
+      reindexGlyphs();
+    }
+
     renderGlyphList();
+  }
+
+  function buildSvgFromPath(pathData, unitsPerEm) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${unitsPerEm} ${unitsPerEm}" fill="currentColor"><path d="${pathData}"/></svg>`;
+  }
+
+  // ── Glyph Management ──────────────────────────────────
+
+  function reindexGlyphs() {
+    const startHex = codepointStartInput.value.trim();
+    let start = parseInt(startHex, 16);
+    if (isNaN(start) || start < 0x20) start = 0xE001;
+    state.codepointStart = start;
+
+    state.glyphs.forEach((g, i) => {
+      g.codepoint = start + i;
+    });
+
+    invalidateCssPreview();
+  }
+
+  function sortGlyphsAZ() {
+    state.glyphs.sort((a, b) => a.name.localeCompare(b.name));
+    reindexGlyphs();
+    renderGlyphList();
+  }
+
+  function handleReindex() {
+    reindexGlyphs();
+    renderGlyphList();
+  }
+
+  // ── Drag-and-Drop Reorder ─────────────────────────────
+  let dragSrcIndex = null;
+
+  function handleDragStart(e, index) {
+    dragSrcIndex = index;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index);
+    // Delay adding class so the drag image captures before transparency
+    setTimeout(() => e.target.classList.add('glyph-card--dragging'), 0);
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const card = e.target.closest('.glyph-card');
+    if (card) card.classList.add('glyph-card--dragover');
+  }
+
+  function handleDragLeave(e) {
+    const card = e.target.closest('.glyph-card');
+    if (card) card.classList.remove('glyph-card--dragover');
+  }
+
+  function handleDrop(e, targetIndex) {
+    e.preventDefault();
+    const card = e.target.closest('.glyph-card');
+    if (card) card.classList.remove('glyph-card--dragover');
+
+    if (dragSrcIndex === null || dragSrcIndex === targetIndex) return;
+
+    // Move the glyph in the array
+    const [moved] = state.glyphs.splice(dragSrcIndex, 1);
+    state.glyphs.splice(targetIndex, 0, moved);
+    dragSrcIndex = null;
+
+    reindexGlyphs();
+    renderGlyphList();
+  }
+
+  function handleDragEnd(e) {
+    e.target.classList.remove('glyph-card--dragging');
+    dragSrcIndex = null;
+    // Clean up any lingering dragover classes
+    document.querySelectorAll('.glyph-card--dragover').forEach(el => el.classList.remove('glyph-card--dragover'));
   }
 
   // ── Glyph List Rendering ──────────────────────────────
   function renderGlyphList() {
-    const totalCount = state.existingGlyphs.length + state.newSvgFiles.length;
+    const totalCount = state.glyphs.length;
     glyphCountBadge.textContent = totalCount + ' glyph' + (totalCount !== 1 ? 's' : '');
     fontNameDisplay.textContent = fontNameInput.value || state.fontName;
 
     if (totalCount === 0) {
       hide(glyphListWrapper);
       hide(generateActions);
+      hide(glyphToolbar);
+      hide(cssConfigSection);
+      hide(cssPreviewSection);
       return;
     }
 
     show(glyphListWrapper);
     show(generateActions);
+    show(glyphToolbar);
+    show(cssConfigSection);
+    show(cssPreviewSection);
 
     glyphList.innerHTML = '';
 
-    // Existing glyphs (from opened .woff)
-    state.existingGlyphs.forEach((g, i) => {
-      const card = createGlyphCard({
-        name: g.name,
-        unicode: g.unicodeHex,
-        svgPathData: g.svgPathData,
-        isExisting: true,
-        onRemove: () => {
-          state.existingGlyphs.splice(i, 1);
-          renderGlyphList();
-        },
-      });
-      glyphList.appendChild(card);
-    });
-
-    // New SVGs
-    state.newSvgFiles.forEach((item, i) => {
-      const card = createGlyphCard({
-        name: item.name,
-        unicode: null,
-        svgContent: item.svgContent,
-        isExisting: false,
-        onRemove: () => {
-          state.newSvgFiles.splice(i, 1);
-          renderGlyphList();
-        },
-      });
+    state.glyphs.forEach((g, i) => {
+      const card = createGlyphCard(g, i);
       glyphList.appendChild(card);
     });
   }
 
-  function createGlyphCard({ name, unicode, svgPathData, svgContent, isExisting, onRemove }) {
+  function createGlyphCard(glyph, index) {
+    const prefix = cssPrefixInput.value.trim() || 'icon';
+
     const card = document.createElement('div');
-    card.className = 'glyph-card' + (isExisting ? ' glyph-card--existing' : '');
+    card.className = 'glyph-card' + (glyph.isNew ? '' : ' glyph-card--existing');
+    card.draggable = true;
+    card.dataset.index = index;
+
+    // Drag events
+    card.addEventListener('dragstart', (e) => handleDragStart(e, index));
+    card.addEventListener('dragover', handleDragOver);
+    card.addEventListener('dragleave', handleDragLeave);
+    card.addEventListener('drop', (e) => handleDrop(e, index));
+    card.addEventListener('dragend', handleDragEnd);
+
+    // Index badge
+    const indexBadge = document.createElement('div');
+    indexBadge.className = 'glyph-card__index';
+    indexBadge.textContent = '#' + index;
 
     // Preview
     const preview = document.createElement('div');
     preview.className = 'glyph-card__preview';
-    if (svgContent) {
-      // Use the raw SVG content for new files
+    if (glyph.svgContent) {
       const parser = new DOMParser();
-      const doc = parser.parseFromString(svgContent, 'image/svg+xml');
+      const doc = parser.parseFromString(glyph.svgContent, 'image/svg+xml');
       const svg = doc.querySelector('svg');
       if (svg) {
         svg.removeAttribute('width');
         svg.removeAttribute('height');
         svg.style.width = '100%';
         svg.style.height = '100%';
+        // Ensure visibility on dark background
+        if (!svg.getAttribute('fill') || svg.getAttribute('fill') === 'none') {
+          svg.setAttribute('fill', 'currentColor');
+        }
         preview.appendChild(svg);
       }
-    } else if (svgPathData) {
-      // Generate SVG from path data for existing glyphs
+    } else if (glyph.svgPathData) {
       const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svgEl.setAttribute('viewBox', '0 0 1000 1000');
       svgEl.setAttribute('fill', 'currentColor');
       const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      pathEl.setAttribute('d', svgPathData);
+      pathEl.setAttribute('d', glyph.svgPathData);
       svgEl.appendChild(pathEl);
       preview.appendChild(svgEl);
     } else {
       preview.textContent = '?';
     }
 
-    // Name
+    // Editable Name (with edit hint)
+    const nameRow = document.createElement('div');
+    nameRow.className = 'glyph-card__name-row';
+
     const nameEl = document.createElement('div');
     nameEl.className = 'glyph-card__name';
-    nameEl.textContent = name;
+    nameEl.textContent = glyph.name;
+    nameEl.title = 'Click to rename';
+
+    const editHint = document.createElement('span');
+    editHint.className = 'glyph-card__edit-hint';
+    editHint.textContent = '✎';
+    editHint.title = 'Rename';
+
+    nameRow.appendChild(nameEl);
+    nameRow.appendChild(editHint);
+
+    const handleRenameClick = (e) => {
+      e.stopPropagation();
+      startInlineRename(nameEl, glyph);
+    };
+    nameEl.addEventListener('click', handleRenameClick);
+    editHint.addEventListener('click', handleRenameClick);
 
     // Unicode
     const uniEl = document.createElement('div');
     uniEl.className = 'glyph-card__unicode';
-    uniEl.textContent = unicode || '(new)';
+    uniEl.textContent = glyph.codepoint ? ('U+' + codepointToHex(glyph.codepoint)) : '----';
+
+    // CSS content escape preview
+    const cssContentEl = document.createElement('div');
+    cssContentEl.className = 'glyph-card__css-content';
+    cssContentEl.textContent = glyph.codepoint ? `content: '${codepointToCssEscape(glyph.codepoint)}'` : '';
+
+    // CSS selector preview
+    const cssSelectorEl = document.createElement('div');
+    cssSelectorEl.className = 'glyph-card__css-selector';
+    cssSelectorEl.textContent = `.${prefix}-${glyph.name}`;
 
     // Remove button
     const removeBtn = document.createElement('button');
@@ -193,11 +352,49 @@
     removeBtn.title = 'Remove glyph';
     removeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      onRemove();
+      state.glyphs.splice(index, 1);
+      reindexGlyphs();
+      renderGlyphList();
     });
 
-    card.append(preview, nameEl, uniEl, removeBtn);
+    // Drag handle indicator
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'glyph-card__drag-handle';
+    dragHandle.innerHTML = '⠿';
+    dragHandle.title = 'Drag to reorder';
+
+    card.append(dragHandle, indexBadge, preview, nameRow, uniEl, cssContentEl, cssSelectorEl, removeBtn);
     return card;
+  }
+
+  // ── Inline Rename ─────────────────────────────────────
+  function startInlineRename(nameEl, glyph) {
+    const currentName = glyph.name;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'glyph-card__name-input';
+    input.value = currentName;
+    input.maxLength = 64;
+
+    nameEl.textContent = '';
+    nameEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    function commit() {
+      const newName = input.value.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || currentName;
+      glyph.name = newName;
+      nameEl.textContent = newName;
+      if (newName !== currentName) {
+        invalidateCssPreview();
+      }
+    }
+
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { input.blur(); }
+      if (e.key === 'Escape') { input.value = currentName; input.blur(); }
+    });
   }
 
   // ── File Handling ───────────────────────────────────────
@@ -224,8 +421,15 @@
       }
 
       state.existingWoffFile = file;
+
+      // Pass parsed data with unitsPerEm
+      const glyphsWithUPE = (data.glyphs || []).map(g => ({
+        ...g,
+        unitsPerEm: data.unitsPerEm || 1000,
+      }));
+
       hide(statusBar);
-      goToWorkspace(data.fontFamily, data.glyphs);
+      goToWorkspace(data.fontFamily, glyphsWithUPE);
     } catch (err) {
       hide(statusBar);
       showError(err.message);
@@ -249,10 +453,14 @@
           continue;
         }
 
-        state.newSvgFiles.push({
-          file,
+        state.glyphs.push({
+          id: nextId(),
           name: sanitizeName(file.name),
+          codepoint: null,
           svgContent: content,
+          svgPathData: null,
+          isNew: true,
+          file,
         });
       } catch (err) {
         errors.push(`Failed to read "${file.name}": ${err.message}`);
@@ -263,6 +471,8 @@
       showError(errors.join('\n'));
     }
 
+    // Auto re-index after adding
+    reindexGlyphs();
     renderGlyphList();
   }
 
@@ -275,28 +485,20 @@
     btnGenerate.disabled = true;
 
     try {
-      const formData = new FormData();
-      formData.append('fontName', fontNameInput.value || state.fontName);
-
-      // Attach existing woff if opened
-      if (state.existingWoffFile) {
-        formData.append('woffFile', state.existingWoffFile);
-      }
-
-      // Attach SVG files
-      if (state.newSvgFiles.length === 0 && state.existingGlyphs.length === 0) {
+      if (state.glyphs.length === 0) {
         throw new Error('No glyphs to generate. Please add at least one SVG file.');
       }
 
-      for (const item of state.newSvgFiles) {
-        formData.append('svgFiles', item.file);
-      }
+      // Build glyphMeta with full SVG content
+      const glyphMeta = state.glyphs.map(g => ({
+        name: g.name,
+        codepoint: g.codepoint,
+        svgContent: g.svgContent,
+      }));
 
-      // If only existing glyphs and no new SVGs, we still need at least one SVG
-      // Create a dummy SVG from existing glyph paths for re-generation
-      if (state.newSvgFiles.length === 0 && state.existingGlyphs.length > 0 && !state.existingWoffFile) {
-        throw new Error('Please add at least one new SVG file to generate a font.');
-      }
+      const formData = new FormData();
+      formData.append('fontName', fontNameInput.value || state.fontName);
+      formData.append('glyphMeta', JSON.stringify(glyphMeta));
 
       const res = await fetch('/api/generate', { method: 'POST', body: formData });
 
@@ -307,17 +509,6 @@
 
       const blob = await res.blob();
       state.generatedBlob = blob;
-
-      // Check for warnings
-      const warnings = res.headers.get('X-Warnings');
-      if (warnings) {
-        try {
-          const warnArr = JSON.parse(warnings);
-          if (warnArr.length > 0) {
-            showError('⚠ Some files had issues:\n' + warnArr.join('\n'));
-          }
-        } catch (_) { /* ignore */ }
-      }
 
       hide(statusBar);
 
@@ -347,6 +538,132 @@
     URL.revokeObjectURL(url);
   }
 
+  // ── CSS Export & Preview ───────────────────────────────
+
+  /** Fetch generated CSS text from the server. */
+  async function fetchGeneratedCss() {
+    const prefix = cssPrefixInput.value.trim() || 'icon';
+    const fontFamily = fontNameInput.value.trim() || state.fontName;
+    const fontPath = `fonts/${fontFamily}.woff`;
+
+    const res = await fetch('/api/generate-css', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fontFamily,
+        prefix,
+        fontPath,
+        glyphs: state.glyphs.map(g => ({
+          name: g.name,
+          codepoint: g.codepoint,
+        })),
+      }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || 'CSS generation failed.');
+    }
+
+    return res.text();
+  }
+
+  /** Download a CSS text string as a .css file. */
+  function downloadCss(cssText, fontFamily) {
+    const blob = new Blob([cssText], { type: 'text/css' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${fontFamily}.css`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /** Preview CSS in the on-page panel. */
+  async function handlePreviewCss() {
+    hideError();
+
+    if (state.glyphs.length === 0) {
+      showError('No glyphs to preview. Please add at least one glyph.');
+      return;
+    }
+
+    try {
+      btnPreviewCss.disabled = true;
+      btnPreviewCss.textContent = 'Generating...';
+
+      const cssText = await fetchGeneratedCss();
+      state.cssPreviewText = cssText;
+
+      // Render into the preview panel
+      cssPreviewCode.classList.remove('css-preview__code--stale');
+      cssPreviewCode.innerHTML = '';
+      const codeEl = document.createElement('code');
+      codeEl.textContent = cssText;
+      cssPreviewCode.appendChild(codeEl);
+
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btnPreviewCss.disabled = false;
+      btnPreviewCss.innerHTML = `<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg> Preview CSS`;
+    }
+  }
+
+  /** Download CSS — reuse cached preview if available, otherwise fetch. */
+  async function handleExportCss() {
+    hideError();
+
+    if (state.glyphs.length === 0) {
+      showError('No glyphs to export. Please add at least one glyph.');
+      return;
+    }
+
+    try {
+      const fontFamily = fontNameInput.value.trim() || state.fontName;
+      let cssText = state.cssPreviewText;
+
+      // If no cached preview, fetch fresh
+      if (!cssText) {
+        cssText = await fetchGeneratedCss();
+        state.cssPreviewText = cssText;
+      }
+
+      downloadCss(cssText, fontFamily);
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  /** Copy CSS to clipboard. */
+  async function handleCopyCss() {
+    if (!state.cssPreviewText) {
+      // Generate first
+      await handlePreviewCss();
+    }
+
+    if (state.cssPreviewText) {
+      try {
+        await navigator.clipboard.writeText(state.cssPreviewText);
+        const originalText = btnCopyCss.textContent;
+        btnCopyCss.textContent = '✓ Copied!';
+        setTimeout(() => {
+          btnCopyCss.innerHTML = `<svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+          </svg> Copy`;
+        }, 1500);
+      } catch (err) {
+        showError('Failed to copy: ' + err.message);
+      }
+    }
+  }
+
   // ── Event Listeners ────────────────────────────────────
 
   // Start mode
@@ -373,7 +690,7 @@
     svgInput.value = '';
   });
 
-  // Drag & drop
+  // Drag & drop zone
   dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropZone.classList.add('drop-zone--active');
@@ -393,13 +710,38 @@
   fontNameInput.addEventListener('input', () => {
     fontNameDisplay.textContent = fontNameInput.value || 'CustomFont';
     state.fontName = fontNameInput.value || 'CustomFont';
+    invalidateCssPreview();
   });
 
-  // Generate
+  // Toolbar: Sort, Re-index
+  if (btnSortAZ) btnSortAZ.addEventListener('click', sortGlyphsAZ);
+  if (btnReindex) btnReindex.addEventListener('click', handleReindex);
+  if (codepointStartInput) {
+    codepointStartInput.addEventListener('change', () => {
+      const val = parseInt(codepointStartInput.value.trim(), 16);
+      if (!isNaN(val) && val >= 0x20) {
+        state.codepointStart = val;
+      }
+    });
+  }
+  if (cssPrefixInput) {
+    cssPrefixInput.addEventListener('input', () => {
+      state.cssPrefix = cssPrefixInput.value.trim() || 'icon';
+      invalidateCssPreview();
+    });
+  }
+
+  // CSS Preview & Copy
+  if (btnPreviewCss) btnPreviewCss.addEventListener('click', handlePreviewCss);
+  if (btnCopyCss) btnCopyCss.addEventListener('click', handleCopyCss);
+
+  // Generate & Export
   btnGenerate.addEventListener('click', handleGenerate);
+  if (btnExportCss) btnExportCss.addEventListener('click', handleExportCss);
 
   // Download
   btnDownload.addEventListener('click', handleDownload);
+  if (btnDownloadCss) btnDownloadCss.addEventListener('click', handleExportCss);
 
   // Dismiss error
   btnDismissError.addEventListener('click', hideError);

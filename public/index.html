@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Internal WOFF font tool — load, create, and generate .woff font files from SVG glyphs">
+  <meta name="description" content="Internal WOFF font tool — load, create, and generate .woff font files from SVG glyphs with CSS preview">
   <title>WOFF Tool — Font Generator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -86,20 +86,89 @@
           <input type="file" id="svgInput" accept=".svg" multiple hidden>
         </div>
 
+        <!-- Glyph Toolbar -->
+        <div id="glyphToolbar" class="glyph-toolbar hidden">
+          <div class="glyph-toolbar__left">
+            <button id="btnSortAZ" class="btn btn--ghost btn--sm" type="button" title="Sort glyphs alphabetically and re-index">
+              <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h7"/><path d="M3 12h10"/><path d="M3 18h5"/>
+                <path d="M17 6v12"/><path d="M14 18l3 3 3-3"/>
+              </svg>
+              Sort by name
+            </button>
+            <button id="btnReindex" class="btn btn--ghost btn--sm" type="button" title="Re-assign codepoints sequentially">
+              <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 4h18"/><path d="M3 12h18"/><path d="M3 20h18"/>
+                <circle cx="7" cy="4" r="1" fill="currentColor"/><circle cx="7" cy="12" r="1" fill="currentColor"/><circle cx="7" cy="20" r="1" fill="currentColor"/>
+              </svg>
+              Re-index
+            </button>
+          </div>
+          <div class="glyph-toolbar__right">
+            <label class="glyph-toolbar__label" for="codepointStartInput">Start</label>
+            <input type="text" id="codepointStartInput" class="form-input form-input--sm" value="E001" placeholder="E001" maxlength="6">
+          </div>
+        </div>
+
         <!-- Glyph List -->
         <div id="glyphListWrapper" class="glyph-list-wrapper hidden">
           <h3 class="glyph-list__title">Glyphs</h3>
           <div id="glyphList" class="glyph-list"></div>
         </div>
 
+        <!-- CSS Config -->
+        <div id="cssConfigSection" class="css-config hidden">
+          <div class="css-config__row">
+            <div class="css-config__field">
+              <label class="form-label" for="cssPrefixInput">CSS Prefix</label>
+              <input type="text" id="cssPrefixInput" class="form-input form-input--sm" value="icon" placeholder="icon">
+            </div>
+          </div>
+        </div>
+
+        <!-- CSS Preview Panel -->
+        <div id="cssPreviewSection" class="css-preview hidden">
+          <div class="css-preview__header">
+            <h3 class="css-preview__title">Generated CSS Preview</h3>
+            <div class="css-preview__actions">
+              <button id="btnPreviewCss" class="btn btn--ghost btn--sm" type="button">
+                <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                Preview CSS
+              </button>
+              <button id="btnCopyCss" class="btn btn--ghost btn--sm" type="button" title="Copy CSS to clipboard">
+                <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                </svg>
+                Copy
+              </button>
+            </div>
+          </div>
+          <p class="css-preview__hint">Click <strong>Preview CSS</strong> to generate. Changes to glyphs will require a refresh.</p>
+          <pre id="cssPreviewCode" class="css-preview__code"><code>/* Click "Preview CSS" to generate */</code></pre>
+        </div>
+
         <!-- Generate Actions -->
         <div id="generateActions" class="generate-actions hidden">
-          <button id="btnGenerate" class="btn btn--accent btn--lg btn--full" type="button">
-            <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>
-            </svg>
-            Generate .woff
-          </button>
+          <div class="generate-actions__row">
+            <button id="btnGenerate" class="btn btn--accent btn--lg btn--flex" type="button">
+              <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>
+              </svg>
+              Generate .woff
+            </button>
+            <button id="btnExportCss" class="btn btn--primary btn--lg btn--flex" type="button">
+              <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="7,10 12,15 17,10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download .css
+            </button>
+          </div>
         </div>
 
         <!-- Status / Progress -->
@@ -129,7 +198,10 @@
               <span id="downloadFileName" class="download-card__name">CustomFont.woff</span>
               <span id="downloadFileSize" class="download-card__size"></span>
             </div>
-            <button id="btnDownload" class="btn btn--primary btn--sm" type="button">Download</button>
+            <div class="download-card__buttons">
+              <button id="btnDownload" class="btn btn--primary btn--sm" type="button">Download .woff</button>
+              <button id="btnDownloadCss" class="btn btn--secondary btn--sm" type="button">Download .css</button>
+            </div>
           </div>
         </div>
       </section>
