@@ -7,6 +7,7 @@ const os = require('os');
 const { Readable } = require('stream');
 const opentype = require('opentype.js');
 const { buildCssText } = require('./lib/build-css');
+const { normalizeSvg } = require('./lib/normalize-svg');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
@@ -173,6 +174,46 @@ async function generateWoff(svgItems, fontName = 'CustomFont', existingWoffBuffe
   return Buffer.from(woffResult.buffer);
 }
 
+// ── Latest Bundle Persistence ───────────────────────────────
+
+const LATEST_DIR = path.join(__dirname, 'data', 'latest');
+
+/**
+ * Persist the latest generated bundle to disk for MCP export.
+ * @param {Buffer} woffBuffer
+ * @param {Array} glyphs  — [{ name, codepoint, svgContent }]
+ * @param {string} fontFamily
+ * @param {string} cssPrefix
+ */
+function persistLatestBundle(woffBuffer, glyphs, fontFamily, cssPrefix = 'icon') {
+  fs.mkdirSync(LATEST_DIR, { recursive: true });
+
+  // Write .woff
+  fs.writeFileSync(path.join(LATEST_DIR, 'font.woff'), woffBuffer);
+
+  // Build metadata
+  const metadata = {
+    fontFamily,
+    generatedAt: new Date().toISOString(),
+    glyphs: glyphs.map(g => {
+      const cp = g.codepoint || 0;
+      return {
+        name: g.name,
+        codepoint: cp,
+        unicodeHex: 'U+' + cp.toString(16).toUpperCase().padStart(4, '0'),
+        cssSelector: `.${cssPrefix}-${(g.name || 'glyph').replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+        cssContentEscape: `\\${cp.toString(16).toLowerCase()}`,
+        previewSvg: g.svgContent || '',
+      };
+    }),
+  };
+
+  fs.writeFileSync(
+    path.join(LATEST_DIR, 'metadata.json'),
+    JSON.stringify(metadata, null, 2),
+  );
+}
+
 // ── API Routes ──────────────────────────────────────────────
 
 /**
@@ -230,6 +271,14 @@ app.post('/api/generate', upload.fields([
     // If glyphMeta is provided, it contains all the SVG content inline
     if (glyphMeta && glyphMeta.length > 0) {
       const woffBuffer = await generateWoff([], fontName, null, glyphMeta);
+
+      // Persist bundle for MCP export
+      try {
+        persistLatestBundle(woffBuffer, glyphMeta, fontName, req.body.cssPrefix || 'icon');
+      } catch (e) {
+        console.error('Failed to persist latest bundle:', e.message);
+      }
+
       res.set({
         'Content-Type': 'font/woff',
         'Content-Disposition': `attachment; filename="${fontName}.woff"`,
@@ -330,6 +379,43 @@ app.post('/api/generate-css', express.json(), (req, res) => {
   }
 });
 
+/**
+ * POST /api/normalize
+ * Normalize an SVG to a target size and alignment.
+ * Body JSON: { svgContent, targetWidth, targetHeight, alignH, alignV }
+ */
+app.post('/api/normalize', express.json(), (req, res) => {
+  try {
+    const { svgContent, targetWidth, targetHeight, alignH, alignV } = req.body;
+    const result = normalizeSvg({ svgContent, targetWidth, targetHeight, alignH, alignV });
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ normalizedSvg: result.normalizedSvg });
+  } catch (err) {
+    console.error('normalize error:', err);
+    res.status(500).json({ error: `Normalization failed: ${err.message}` });
+  }
+});
+
+/**
+ * GET /api/latest-bundle
+ * Returns the latest generated bundle metadata (diagnostic endpoint).
+ */
+app.get('/api/latest-bundle', (req, res) => {
+  try {
+    const metaPath = path.join(LATEST_DIR, 'metadata.json');
+    if (!fs.existsSync(metaPath)) {
+      return res.status(404).json({ error: 'No generated bundle available. Generate a .woff first using the WOFF Tool UI.' });
+    }
+    const metadata = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    res.json(metadata);
+  } catch (err) {
+    console.error('latest-bundle error:', err);
+    res.status(500).json({ error: `Failed to read latest bundle: ${err.message}` });
+  }
+});
+
 // ── Serve SPA ────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -342,4 +428,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, buildCssText };
+module.exports = { app, buildCssText, normalizeSvg, persistLatestBundle };

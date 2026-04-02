@@ -557,6 +557,198 @@ code {
   box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
 }
 
+/* ── Normalization Panel ────────────────────────────── */
+.norm-panel {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+  animation: fadeIn 0.3s ease;
+}
+
+.norm-panel__header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.norm-panel__title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.norm-panel__icon {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+
+.norm-panel__body {
+  padding: 12px 16px;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.norm-panel__fields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.norm-panel__field {
+  min-width: 80px;
+}
+
+.norm-panel__field .form-input--sm {
+  max-width: 90px;
+  font-family: var(--font);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.norm-panel__field select.form-input--sm {
+  max-width: 110px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 10px;
+  padding-right: 24px;
+}
+
+.norm-panel__btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Glyph Card: Normalize button ────────────────── */
+.glyph-card__normalize {
+  position: absolute;
+  top: 4px;
+  right: 24px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--primary);
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.glyph-card:hover .glyph-card__normalize {
+  opacity: 1;
+}
+
+.glyph-card__normalize:hover {
+  background: rgba(99, 102, 241, 0.4);
+}
+
+/* ── Search Bar ─────────────────────────────────────── */
+.search-wrapper {
+  margin-bottom: 16px;
+  animation: fadeIn 0.3s ease;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.search-bar:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+.search-bar__icon {
+  width: 18px;
+  height: 18px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  transition: color var(--transition);
+}
+
+.search-bar:focus-within .search-bar__icon {
+  color: var(--accent);
+}
+
+.search-bar__input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: var(--font);
+  font-size: 0.88rem;
+  color: var(--text);
+  outline: none;
+  min-width: 0;
+}
+
+.search-bar__input::placeholder {
+  color: var(--text-dim);
+}
+
+.search-bar__clear {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+
+.search-bar__clear:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text);
+}
+
+.search-bar__count {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  padding-left: 2px;
+}
+
+.search-bar__count strong {
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
 /* ── Glyph Toolbar ──────────────────────────────────── */
 .glyph-toolbar {
   display: flex;
@@ -875,6 +1067,21 @@ code {
   .glyph-toolbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .norm-panel__body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .norm-panel__fields {
+    flex-direction: column;
+  }
+
+  .norm-panel__field .form-input--sm,
+  .norm-panel__field select.form-input--sm {
+    max-width: 100%;
+    width: 100%;
   }
 
   .generate-actions__row {

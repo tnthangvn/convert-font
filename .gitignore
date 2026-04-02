@@ -4,3 +4,5 @@ dist
 build
 .dist
 .build
+.omx
+data/latest/

@@ -7,12 +7,17 @@
   const state = {
     mode: 'start', // 'start' | 'workspace'
     existingWoffFile: null,    // File object (original .woff)
-    glyphs: [],                // unified: { id, name, codepoint, svgContent, svgPathData, isNew, file, unitsPerEm }
+    glyphs: [],                // unified: { id, name, codepoint, svgContent, originalSvgContent, svgPathData, isNew, file, unitsPerEm }
     generatedBlob: null,
     fontName: 'CustomFont',
     codepointStart: 0xE001,
-    cssPrefix: 'icon',
+    cssPrefix: sessionStorage.getItem('woff_cssPrefix') || 'icon',
     cssPreviewText: null,      // cached CSS preview text (invalidated on changes)
+    normWidth: 28,
+    normHeight: 28,
+    normAlignH: 'center',
+    normAlignV: 'center',
+    searchQuery: '',           // current search/filter text
   };
 
   function nextId() { return ++_idCounter; }
@@ -56,6 +61,16 @@
   const cssPreviewCode = $('#cssPreviewCode');
   const btnPreviewCss = $('#btnPreviewCss');
   const btnCopyCss = $('#btnCopyCss');
+  const normPanel = $('#normPanel');
+  const normWidthInput = $('#normWidth');
+  const normHeightInput = $('#normHeight');
+  const normAlignHSelect = $('#normAlignH');
+  const normAlignVSelect = $('#normAlignV');
+  const btnNormalizeAll = $('#btnNormalizeAll');
+  const searchWrapper = $('#searchWrapper');
+  const searchInput = $('#searchInput');
+  const btnClearSearch = $('#btnClearSearch');
+  const searchResultCount = $('#searchResultCount');
 
   // ── Helpers ────────────────────────────────────────────
   function show(el) { if (el) el.classList.remove('hidden'); }
@@ -136,6 +151,8 @@
     fontNameDisplay.textContent = state.fontName;
     codepointStartInput.value = state.codepointStart.toString(16).toUpperCase();
     cssPrefixInput.value = state.cssPrefix;
+    state.searchQuery = '';
+    if (searchInput) searchInput.value = '';
 
     hide(startSection);
     show(workspaceSection);
@@ -237,6 +254,8 @@
       hide(glyphListWrapper);
       hide(generateActions);
       hide(glyphToolbar);
+      hide(normPanel);
+      hide(searchWrapper);
       hide(cssConfigSection);
       hide(cssPreviewSection);
       return;
@@ -245,15 +264,34 @@
     show(glyphListWrapper);
     show(generateActions);
     show(glyphToolbar);
+    show(normPanel);
+    show(searchWrapper);
     show(cssConfigSection);
     show(cssPreviewSection);
 
     glyphList.innerHTML = '';
 
+    const query = state.searchQuery.toLowerCase().trim();
+    let visibleCount = 0;
+
     state.glyphs.forEach((g, i) => {
+      const matches = !query || g.name.toLowerCase().includes(query);
       const card = createGlyphCard(g, i);
+      if (!matches) {
+        card.style.display = 'none';
+      } else {
+        visibleCount++;
+      }
       glyphList.appendChild(card);
     });
+
+    // Update search result count
+    if (query) {
+      searchResultCount.innerHTML = `<strong>${visibleCount}</strong> of ${totalCount} icon${totalCount !== 1 ? 's' : ''}`;
+      show(searchResultCount);
+    } else {
+      hide(searchResultCount);
+    }
   }
 
   function createGlyphCard(glyph, index) {
@@ -345,6 +383,16 @@
     cssSelectorEl.className = 'glyph-card__css-selector';
     cssSelectorEl.textContent = `.${prefix}-${glyph.name}`;
 
+    // Normalize button (per-glyph)
+    const normBtn = document.createElement('button');
+    normBtn.className = 'glyph-card__normalize';
+    normBtn.innerHTML = '⊞';
+    normBtn.title = 'Normalize this icon';
+    normBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      normalizeOne(glyph);
+    });
+
     // Remove button
     const removeBtn = document.createElement('button');
     removeBtn.className = 'glyph-card__remove';
@@ -363,7 +411,7 @@
     dragHandle.innerHTML = '⠿';
     dragHandle.title = 'Drag to reorder';
 
-    card.append(dragHandle, indexBadge, preview, nameRow, uniEl, cssContentEl, cssSelectorEl, removeBtn);
+    card.append(dragHandle, indexBadge, preview, nameRow, uniEl, cssContentEl, cssSelectorEl, normBtn, removeBtn);
     return card;
   }
 
@@ -395,6 +443,156 @@
       if (e.key === 'Enter') { input.blur(); }
       if (e.key === 'Escape') { input.value = currentName; input.blur(); }
     });
+  }
+
+  // ── Client-Side SVG Normalization ──────────────────────
+
+  /**
+   * Normalize an SVG string client-side.
+   * Same algorithm as lib/normalize-svg.js but runs in the browser.
+   */
+  function normalizeSvgClient(svgContent, targetWidth, targetHeight, alignH, alignV) {
+    if (!svgContent) return { error: 'No SVG content.' };
+
+    // Check for data-original-viewbox (set by prior normalization)
+    const origAttrMatch = svgContent.match(/data-original-viewbox="([^"]*)"/);
+    let sourceVB = null;
+
+    if (origAttrMatch) {
+      const parts = origAttrMatch[1].split(/[\s,]+/).map(Number);
+      if (parts.length === 4 && parts.every(n => !isNaN(n))) {
+        sourceVB = { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
+      }
+    }
+
+    if (!sourceVB) {
+      const vbMatch = svgContent.match(/viewBox="([^"]*)"/i);
+      if (vbMatch) {
+        const parts = vbMatch[1].split(/[\s,]+/).map(Number);
+        if (parts.length === 4 && parts.every(n => !isNaN(n))) {
+          sourceVB = { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
+        }
+      }
+    }
+
+    if (!sourceVB) {
+      const wMatch = svgContent.match(/\bwidth="([^"]*)"/i);
+      const hMatch = svgContent.match(/\bheight="([^"]*)"/i);
+      if (wMatch && hMatch) {
+        const w = parseFloat(wMatch[1]);
+        const h = parseFloat(hMatch[1]);
+        if (w > 0 && h > 0) sourceVB = { x: 0, y: 0, w, h };
+      }
+    }
+
+    if (!sourceVB) sourceVB = { x: 0, y: 0, w: 1000, h: 1000 };
+    if (sourceVB.w <= 0 || sourceVB.h <= 0) return { error: 'Source SVG has zero dimensions.' };
+
+    const scaleX = targetWidth / sourceVB.w;
+    const scaleY = targetHeight / sourceVB.h;
+    const scale = Math.min(scaleX, scaleY);
+    const scaledW = sourceVB.w * scale;
+    const scaledH = sourceVB.h * scale;
+
+    let tx = 0, ty = 0;
+    if (alignH === 'right') tx = targetWidth - scaledW;
+    else if (alignH === 'center') tx = (targetWidth - scaledW) / 2;
+    if (alignV === 'bottom') ty = targetHeight - scaledH;
+    else if (alignV === 'center') ty = (targetHeight - scaledH) / 2;
+
+    tx += -sourceVB.x * scale;
+    ty += -sourceVB.y * scale;
+
+    // Extract inner content
+    let inner = svgContent.replace(/<svg[^>]*>/i, '').replace(/<\/svg>\s*$/i, '').trim();
+    const wrapperMatch = inner.match(/<g data-norm-wrapper="true"[^>]*>([\s\S]*)<\/g>/i);
+    if (wrapperMatch) inner = wrapperMatch[1].trim();
+
+    const originalVB = origAttrMatch
+      ? origAttrMatch[1]
+      : `${sourceVB.x} ${sourceVB.y} ${sourceVB.w} ${sourceVB.h}`;
+
+    const r = (n) => Math.round(n * 10000) / 10000;
+    const transform = `translate(${r(tx)}, ${r(ty)}) scale(${r(scale)})`;
+
+    return {
+      normalizedSvg: [
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${targetWidth} ${targetHeight}" data-original-viewbox="${originalVB}" fill="currentColor">`,
+        `  <g data-norm-wrapper="true" transform="${transform}">`,
+        `    ${inner}`,
+        `  </g>`,
+        `</svg>`,
+      ].join('\n'),
+    };
+  }
+
+  /** Read current normalization settings from UI inputs. */
+  function getNormSettings() {
+    return {
+      targetWidth: parseInt(normWidthInput.value, 10) || 28,
+      targetHeight: parseInt(normHeightInput.value, 10) || 28,
+      alignH: normAlignHSelect.value || 'center',
+      alignV: normAlignVSelect.value || 'center',
+    };
+  }
+
+  /** Normalize a single glyph. */
+  function normalizeOne(glyph) {
+    hideError();
+    const { targetWidth, targetHeight, alignH, alignV } = getNormSettings();
+
+    // Preserve original source on first normalization
+    if (!glyph.originalSvgContent) {
+      glyph.originalSvgContent = glyph.svgContent;
+    }
+
+    // Always normalize from the original source
+    const source = glyph.originalSvgContent || glyph.svgContent;
+    if (!source) {
+      showError(`Cannot normalize "${glyph.name}": no SVG content available.`);
+      return;
+    }
+
+    const result = normalizeSvgClient(source, targetWidth, targetHeight, alignH, alignV);
+    if (result.error) {
+      showError(`Normalization failed for "${glyph.name}": ${result.error}`);
+      return;
+    }
+
+    glyph.svgContent = result.normalizedSvg;
+    invalidateCssPreview();
+    renderGlyphList();
+  }
+
+  /** Normalize all glyphs using current preset. */
+  function normalizeAll() {
+    hideError();
+    const { targetWidth, targetHeight, alignH, alignV } = getNormSettings();
+    const errors = [];
+
+    for (const glyph of state.glyphs) {
+      if (!glyph.originalSvgContent) {
+        glyph.originalSvgContent = glyph.svgContent;
+      }
+      const source = glyph.originalSvgContent || glyph.svgContent;
+      if (!source) {
+        errors.push(`"${glyph.name}": no SVG content available.`);
+        continue;
+      }
+      const result = normalizeSvgClient(source, targetWidth, targetHeight, alignH, alignV);
+      if (result.error) {
+        errors.push(`"${glyph.name}": ${result.error}`);
+        continue;
+      }
+      glyph.svgContent = result.normalizedSvg;
+    }
+
+    if (errors.length > 0) {
+      showError('Some icons could not be normalized:\n' + errors.join('\n'));
+    }
+
+    invalidateCssPreview();
+    renderGlyphList();
   }
 
   // ── File Handling ───────────────────────────────────────
@@ -458,6 +656,7 @@
           name: sanitizeName(file.name),
           codepoint: null,
           svgContent: content,
+          originalSvgContent: content,
           svgPathData: null,
           isNew: true,
           file,
@@ -528,10 +727,13 @@
 
   function handleDownload() {
     if (!state.generatedBlob) return;
+    const defaultName = (fontNameInput.value || state.fontName) + '.woff';
+    const fileName = prompt('Save as:', defaultName);
+    if (!fileName) return; // user cancelled
     const url = URL.createObjectURL(state.generatedBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = (fontNameInput.value || state.fontName) + '.woff';
+    a.download = fileName.endsWith('.woff') ? fileName : fileName + '.woff';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -727,9 +929,39 @@
   if (cssPrefixInput) {
     cssPrefixInput.addEventListener('input', () => {
       state.cssPrefix = cssPrefixInput.value.trim() || 'icon';
+      sessionStorage.setItem('woff_cssPrefix', state.cssPrefix);
       invalidateCssPreview();
     });
   }
+
+  // Search filtering
+  if (searchInput) {
+    let searchDebounce = null;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => {
+        state.searchQuery = searchInput.value;
+        if (searchInput.value) {
+          show(btnClearSearch);
+        } else {
+          hide(btnClearSearch);
+        }
+        renderGlyphList();
+      }, 150);
+    });
+  }
+  if (btnClearSearch) {
+    btnClearSearch.addEventListener('click', () => {
+      searchInput.value = '';
+      state.searchQuery = '';
+      hide(btnClearSearch);
+      renderGlyphList();
+      searchInput.focus();
+    });
+  }
+
+  // Normalization
+  if (btnNormalizeAll) btnNormalizeAll.addEventListener('click', normalizeAll);
 
   // CSS Preview & Copy
   if (btnPreviewCss) btnPreviewCss.addEventListener('click', handlePreviewCss);

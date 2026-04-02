@@ -6,11 +6,18 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
+    "mcp": "node mcp-server.mjs",
     "test": "node --test 'tests/**/*.test.js'"
   },
-  "keywords": ["woff", "font", "svg", "icon-font"],
+  "keywords": [
+    "woff",
+    "font",
+    "svg",
+    "icon-font"
+  ],
   "license": "MIT",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "multer": "^1.4.5-lts.1",
