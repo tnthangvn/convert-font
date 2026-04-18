@@ -1,0 +1,593 @@
+@font-face {
+  font-family: 'RV-Icon';
+  src: url('~~/public/fonts/RV-Icon.woff?mnj1teui') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+[class^='rvi-'],
+[class*=' rvi-'] {
+  font-family: 'RV-Icon' !important;
+  speak: never;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.rvi-football:before,
+.rvi-bong-da-3:before,
+.rvi-bong-da-5:before,
+.rvi-bong-da-7:before,
+.rvi-bong-da-mini-league:before {
+  content: '⚽';
+}
+.rvi-basketball:before,
+.rvi-bong-ro-3x3:before,
+.rvi-bong-ro-5x5:before {
+  content: '🏀';
+}
+.rvi-tennis:before {
+  content: '🎾';
+}
+.rvi-rugby:before {
+  content: '🏉';
+}
+.rvi-cricket:before {
+  content: '🏏';
+}
+.rvi-volleyball:before {
+  content: '🏐';
+}
+.rvi-baseball:before,
+.rvi-bong-chuyen:before {
+  content: '⚾';
+}
+.rvi-badminton:before,
+.rvi-cau-long-doi:before,
+.rvi-cau-long-don:before {
+  content: '🏸';
+}
+.rvi-ping-pong:before,
+.rvi-bong-ban-don:before,
+.rvi-bong-ban-doi:before {
+  content: '🏓';
+}
+.rvi-swimming:before {
+  content: '🏊';
+}
+.rvi-surf:before {
+  content: '🏄';
+}
+.rvi-karate:before {
+  content: '🥋';
+}
+.rvi-golf:before {
+  content: '⛳';
+}
+.rvi-golf-2:before {
+  content: '🏌️';
+}
+.rvi-golf-3:before {
+  content: '🏌️‍♀️';
+}
+.rvi-bodybuilding:before {
+  content: '🏋️';
+}
+.rvi-bodybuilding-2:before {
+  content: '🏋️‍♀️';
+}
+.rvi-cycling:before {
+  content: '🚴';
+}
+.rvi-horse-racing:before {
+  content: '🏇';
+}
+.rvi-wrestling:before {
+  content: '🤼';
+}
+.rvi-wrestling-2:before {
+  content: '🤼‍♀️';
+}
+.rvi-esport-1v1:before,
+.rvi-esport-2v2:before,
+.rvi-esport-3v3:before,
+.rvi-esport-4v4:before,
+.rvi-esport-5v5:before {
+  content: '🎮';
+}
+
+.rvi-activity:before {
+  content: '\e001';
+}
+
+.rvi-apple:before {
+  content: '\e002';
+}
+
+.rvi-arrow-2-down:before {
+  content: '\e003';
+}
+
+.rvi-arrow-2-left:before {
+  content: '\e004';
+}
+
+.rvi-arrow-2-right:before {
+  content: '\e005';
+}
+
+.rvi-arrow-2-up:before {
+  content: '\e006';
+}
+
+.rvi-arrow-bottom-right:before {
+  content: '\e007';
+}
+
+.rvi-arrow-down:before {
+  content: '\e008';
+}
+
+.rvi-arrow-left:before {
+  content: '\e009';
+}
+
+.rvi-arrow-right:before {
+  content: '\e00a';
+}
+
+.rvi-arrow-up:before {
+  content: '\e00b';
+}
+
+.rvi-arrow-up-down:before {
+  content: '\e00c';
+}
+
+.rvi-arrow-up-right:before {
+  content: '\e00d';
+}
+
+.rvi-award:before {
+  content: '\e00e';
+}
+
+.rvi-bar:before {
+  content: '\e00f';
+}
+
+.rvi-bell-1:before {
+  content: '\e010';
+}
+
+.rvi-bell-ring:before {
+  content: '\e011';
+}
+
+.rvi-briefcase:before {
+  content: '\e012';
+}
+
+.rvi-broken-img:before {
+  content: '\e013';
+}
+
+.rvi-building-2:before {
+  content: '\e014';
+}
+
+.rvi-calendar-2:before {
+  content: '\e015';
+}
+
+.rvi-calendar-3:before {
+  content: '\e016';
+}
+
+.rvi-calendar-clock:before {
+  content: '\e017';
+}
+
+.rvi-calendar-day:before {
+  content: '\e018';
+}
+
+.rvi-camera:before {
+  content: '\e019';
+}
+
+.rvi-chart-column:before {
+  content: '\e01a';
+}
+
+.rvi-check:before {
+  content: '\e01b';
+}
+
+.rvi-check-circle:before {
+  content: '\e01c';
+}
+
+.rvi-check-fat:before {
+  content: '\e01d';
+}
+
+.rvi-circle-check:before {
+  content: '\e01e';
+}
+
+.rvi-circle-gauge:before {
+  content: '\e01f';
+}
+
+.rvi-circle-pause:before {
+  content: '\e020';
+}
+
+.rvi-circle-plus:before {
+  content: '\e021';
+}
+
+.rvi-circle-x:before {
+  content: '\e022';
+}
+
+.rvi-clipboard-list:before {
+  content: '\e023';
+}
+
+.rvi-clock:before {
+  content: '\e024';
+}
+
+.rvi-close:before {
+  content: '\e025';
+}
+
+.rvi-coin:before {
+  content: '\e026';
+}
+
+.rvi-copy:before {
+  content: '\e027';
+}
+
+.rvi-cpu:before {
+  content: '\e028';
+}
+
+.rvi-credit-card:before {
+  content: '\e029';
+}
+
+.rvi-database:before {
+  content: '\e02a';
+}
+
+.rvi-dollars:before {
+  content: '\e02b';
+}
+
+.rvi-double-left:before {
+  content: '\e02c';
+}
+
+.rvi-double-right:before {
+  content: '\e02d';
+}
+
+.rvi-download-1:before {
+  content: '\e02e';
+}
+
+.rvi-earth:before {
+  content: '\e02f';
+}
+
+.rvi-email:before {
+  content: '\e030';
+}
+
+.rvi-eye:before {
+  content: '\e031';
+}
+
+.rvi-eye-slash:before {
+  content: '\e032';
+}
+
+.rvi-eyes:before {
+  content: '\e033';
+}
+
+.rvi-facebook:before {
+  content: '\e034';
+}
+
+.rvi-file-document:before {
+  content: '\e035';
+}
+
+.rvi-file-warning:before {
+  content: '\e036';
+}
+
+.rvi-filter:before {
+  content: '\e037';
+}
+
+.rvi-flame:before {
+  content: '\e038';
+}
+
+.rvi-gift:before {
+  content: '\e039';
+}
+
+.rvi-goal:before {
+  content: '\e03a';
+}
+
+.rvi-graduation-cap:before {
+  content: '\e03b';
+}
+
+.rvi-hash:before {
+  content: '\e03c';
+}
+
+.rvi-history:before {
+  content: '\e03d';
+}
+
+.rvi-home:before {
+  content: '\e03e';
+}
+
+.rvi-info:before {
+  content: '\e03f';
+}
+
+.rvi-internet:before {
+  content: '\e040';
+}
+
+.rvi-key:before {
+  content: '\e041';
+}
+
+.rvi-king:before {
+  content: '\e042';
+}
+
+.rvi-layer:before {
+  content: '\e043';
+}
+
+.rvi-link:before {
+  content: '\e044';
+}
+
+.rvi-list-todo:before {
+  content: '\e045';
+}
+
+.rvi-lock:before {
+  content: '\e046';
+}
+
+.rvi-logout:before {
+  content: '\e047';
+}
+
+.rvi-marker:before {
+  content: '\e048';
+}
+
+.rvi-medal:before {
+  content: '\e049';
+}
+
+.rvi-megaphone:before {
+  content: '\e04a';
+}
+
+.rvi-message:before {
+  content: '\e04b';
+}
+
+.rvi-message-2:before {
+  content: '\e04c';
+}
+
+.rvi-message-dot:before {
+  content: '\e04d';
+}
+
+.rvi-minus:before {
+  content: '\e04e';
+}
+
+.rvi-move:before {
+  content: '\e04f';
+}
+
+.rvi-opposite-directions:before {
+  content: '\e050';
+}
+
+.rvi-pencil:before {
+  content: '\e051';
+}
+
+.rvi-pencil-line:before {
+  content: '\e052';
+}
+
+.rvi-phone:before {
+  content: '\e053';
+}
+
+.rvi-picture:before {
+  content: '\e054';
+}
+
+.rvi-plus:before {
+  content: '\e055';
+}
+
+.rvi-qr-scan:before {
+  content: '\e056';
+}
+
+.rvi-question:before {
+  content: '\e057';
+}
+
+.rvi-reload:before {
+  content: '\e058';
+}
+
+.rvi-search:before {
+  content: '\e059';
+}
+
+.rvi-send:before {
+  content: '\e05a';
+}
+
+.rvi-setting:before {
+  content: '\e05b';
+}
+
+.rvi-shield-blank:before {
+  content: '\e05c';
+}
+
+.rvi-shield-check:before {
+  content: '\e05d';
+}
+
+.rvi-shield-uncheck:before {
+  content: '\e05e';
+}
+
+.rvi-shield-warning:before {
+  content: '\e05f';
+}
+
+.rvi-smart-phone:before {
+  content: '\e060';
+}
+
+.rvi-smile:before {
+  content: '\e061';
+}
+
+.rvi-social-share:before {
+  content: '\e062';
+}
+
+.rvi-sound-line:before {
+  content: '\e063';
+}
+
+.rvi-sparkles:before {
+  content: '\e064';
+}
+
+.rvi-square-pencil:before {
+  content: '\e065';
+}
+
+.rvi-start:before {
+  content: '\e066';
+}
+
+.rvi-start-2:before {
+  content: '\e067';
+}
+
+.rvi-swords:before {
+  content: '\e068';
+}
+
+.rvi-sync:before {
+  content: '\e069';
+}
+
+.rvi-T:before {
+  content: '\e06a';
+}
+
+.rvi-target:before {
+  content: '\e06b';
+}
+
+.rvi-three-dot-vertical:before {
+  content: '\e06c';
+}
+
+.rvi-timer:before {
+  content: '\e06d';
+}
+
+.rvi-trash:before {
+  content: '\e06e';
+}
+
+.rvi-trending-down:before {
+  content: '\e06f';
+}
+
+.rvi-trending-up:before {
+  content: '\e070';
+}
+
+.rvi-trophy:before {
+  content: '\e071';
+}
+
+.rvi-upload:before {
+  content: '\e072';
+}
+
+.rvi-user:before {
+  content: '\e073';
+}
+
+.rvi-user-1:before {
+  content: '\e074';
+}
+
+.rvi-user-2:before {
+  content: '\e075';
+}
+
+.rvi-user-add:before {
+  content: '\e076';
+}
+
+.rvi-user-group:before {
+  content: '\e077';
+}
+
+.rvi-video:before {
+  content: '\e078';
+}
+
+.rvi-wallet:before {
+  content: '\e079';
+}
+
+.rvi-warning:before {
+  content: '\e07a';
+}
+
+.rvi-zap:before {
+  content: '\e07b';
+}

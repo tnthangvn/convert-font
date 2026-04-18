@@ -31,15 +31,21 @@
       <!-- Step: Start Mode -->
       <section id="startSection" class="section section--start">
         <h2 class="section__heading">Get Started</h2>
-        <p class="section__desc">Open an existing <code>.woff</code> file or create a new font set from scratch.</p>
-        <div class="start-actions">
-          <button id="btnOpenWoff" class="btn btn--primary btn--lg" type="button">
-            <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-              <path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/>
-            </svg>
-            Open .woff
-          </button>
+        <p class="section__desc">Drop a <code>.woff</code> file below to edit, or create a new font set from scratch.</p>
+
+        <!-- Woff Drop Zone -->
+        <div id="woffDropZone" class="woff-drop-zone">
+          <svg class="woff-drop-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="17,8 12,3 7,8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="woff-drop-zone__text">Drop <code>.woff</code> file here or <button type="button" id="btnBrowseWoff" class="woff-drop-zone__link">browse</button></p>
+          <p class="woff-drop-zone__hint">Accepts a single .woff font file</p>
+          <input type="file" id="woffInput" accept=".woff" hidden>
+        </div>
+
+        <div class="start-actions start-actions--single">
           <button id="btnCreateNew" class="btn btn--secondary btn--lg" type="button">
             <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/>
@@ -47,7 +53,6 @@
             Create New
           </button>
         </div>
-        <input type="file" id="woffInput" accept=".woff" hidden>
       </section>
 
       <!-- Step: Workspace -->

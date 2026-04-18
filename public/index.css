@@ -145,6 +145,77 @@ code {
   gap: 16px;
 }
 
+.start-actions--single {
+  grid-template-columns: 1fr;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+/* ── WOFF Drop Zone ─────────────────────────────────── */
+.woff-drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-bottom: 20px;
+}
+
+.woff-drop-zone:hover,
+.woff-drop-zone--active {
+  border-color: var(--accent);
+  background: rgba(139, 92, 246, 0.06);
+}
+
+.woff-drop-zone--active {
+  box-shadow: 0 0 0 4px var(--accent-glow);
+}
+
+.woff-drop-zone__icon {
+  width: 48px;
+  height: 48px;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+  transition: all var(--transition);
+}
+
+.woff-drop-zone:hover .woff-drop-zone__icon {
+  color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.woff-drop-zone__text {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.woff-drop-zone__link {
+  background: none;
+  border: none;
+  color: var(--accent-hover);
+  font-family: var(--font);
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.woff-drop-zone__link:hover {
+  color: var(--accent);
+}
+
+.woff-drop-zone__hint {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
 /* ── Buttons ─────────────────────────────────────────── */
 .btn {
   display: inline-flex;

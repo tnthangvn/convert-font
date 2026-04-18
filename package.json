@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Internal WOFF font generation tool — load/create WOFF, add SVG glyphs, generate & download",
   "main": "server.js",
+  "bin": {
+    "woff-tool": "./mcp-server.mjs"
+  },
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",

@@ -6,3 +6,7 @@ build
 .build
 .omx
 data/latest/
+logs
+.worktrees
+worktrees/
+graphify-out/cache

@@ -26,7 +26,8 @@
   const $ = (sel) => document.querySelector(sel);
   const startSection = $('#startSection');
   const workspaceSection = $('#workspaceSection');
-  const btnOpenWoff = $('#btnOpenWoff');
+  const woffDropZone = $('#woffDropZone');
+  const btnBrowseWoff = $('#btnBrowseWoff');
   const btnCreateNew = $('#btnCreateNew');
   const btnBackToStart = $('#btnBackToStart');
   const woffInput = $('#woffInput');
@@ -868,8 +869,30 @@
 
   // ── Event Listeners ────────────────────────────────────
 
-  // Start mode
-  btnOpenWoff.addEventListener('click', () => woffInput.click());
+  // Start mode — WOFF drop zone
+  btnBrowseWoff.addEventListener('click', (e) => {
+    e.stopPropagation();
+    woffInput.click();
+  });
+  woffDropZone.addEventListener('click', (e) => {
+    if (e.target === btnBrowseWoff) return;
+    woffInput.click();
+  });
+  woffDropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    woffDropZone.classList.add('woff-drop-zone--active');
+  });
+  woffDropZone.addEventListener('dragleave', () => {
+    woffDropZone.classList.remove('woff-drop-zone--active');
+  });
+  woffDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    woffDropZone.classList.remove('woff-drop-zone--active');
+    const file = Array.from(e.dataTransfer.files).find(f => f.name.toLowerCase().endsWith('.woff'));
+    if (file) {
+      handleWoffOpen(file);
+    }
+  });
   woffInput.addEventListener('change', (e) => {
     if (e.target.files[0]) handleWoffOpen(e.target.files[0]);
     woffInput.value = '';

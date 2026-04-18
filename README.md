@@ -233,6 +233,129 @@ await client.close();
 
 ---
 
+## Icon Font CLI Automation
+
+Automate adding or updating SVG icons in any `.woff` icon font without using the browser UI. A CLI script calls the same server APIs the UI uses, producing byte-identical output.
+
+### Quick Start
+
+```bash
+# Start the WOFF Tool server (if not running)
+npm run dev
+
+# Add a new icon to an existing font
+node skills/rv-icon/scripts/rv-icon-manage.js add path/to/icon.svg path/to/MyFont.woff
+
+# Update an existing icon
+node skills/rv-icon/scripts/rv-icon-manage.js update path/to/icon.svg path/to/MyFont.woff
+
+# With custom CSS output path
+node skills/rv-icon/scripts/rv-icon-manage.js add icon.svg public/fonts/RV-Icon.woff public/icon.css
+```
+
+### Usage
+
+```
+node rv-icon-manage.js <add|update> <svg-path> <woff-path> [css-output-path]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<action>` | ✅ | `add` or `update` |
+| `<svg-path>` | ✅ | Path to the SVG file |
+| `<woff-path>` | ✅ | Path to the existing `.woff` font |
+| `[css-output-path]` | ❌ | Where to write CSS (default: `icon.css` sibling to fonts dir) |
+
+The font family name is derived from the `.woff` filename (e.g. `RV-Icon.woff` → `RV-Icon`).
+
+### What It Does
+
+When you run an **add** or **update** command, the script automatically:
+
+1. Reads and validates the SVG file
+2. Derives the icon name from the filename (`user.svg` → `rvi-user`)
+3. Parses the existing `.woff`
+4. Normalizes the SVG to **28×28 center-center**
+5. Adds or replaces the icon in the glyph list
+6. Sorts all glyphs **alphabetically by name**
+7. Reindexes all codepoints sequentially from `E001`
+8. Generates the updated `.woff`
+9. Generates the updated CSS
+10. Overwrites the font and CSS files in-place
+
+### Naming Rules
+
+All icon names follow **kebab-case** with the `rvi-` prefix:
+
+| Input Filename | Derived Name |
+|---------------|--------------|
+| `user.svg` | `rvi-user` |
+| `calendar-grid.svg` | `rvi-calendar-grid` |
+| `arrowDown.svg` | `rvi-arrow-down` |
+| `arrow_up_right.svg` | `rvi-arrow-up-right` |
+
+### Duplicate Handling (Add Only)
+
+If the derived name already exists, a numeric suffix is appended:
+
+```
+rvi-user       ← already exists
+rvi-user-1     ← already exists
+rvi-user-2     ← already exists
+rvi-user-3     ← next available → assigned
+```
+
+### Update Behavior
+
+- If the target icon **exists** → replaces its SVG content
+- If the target icon **does not exist** → returns an error (does not silently add)
+
+### Output
+
+The script prints a JSON result to stdout:
+
+```json
+{
+  "success": true,
+  "action": "add",
+  "source": "/path/to/icon.svg",
+  "iconName": "rvi-star",
+  "cssClass": ".rvi-star:before",
+  "codepoint": "e067",
+  "totalGlyphs": 124,
+  "updatedFiles": [
+    "/path/to/MyFont.woff",
+    "/path/to/icon.css"
+  ]
+}
+```
+
+Progress logs are written to stderr.
+
+### AI Agent Usage
+
+If you use an AI coding assistant (Antigravity, Claude, Cursor, etc.), you can issue natural language commands:
+
+```
+add icon assets/icons/star.svg to RV-Icon (at public/fonts/RV-Icon.woff)
+update icon assets/icons/user.svg in MyFont (at dist/fonts/MyFont.woff)
+```
+
+The agent skill at `skills/rv-icon/SKILL.md` handles parsing the command and running the script.
+
+### Error Cases
+
+| Error | Cause |
+|-------|-------|
+| `SVG file not found` | Invalid SVG path |
+| `File is not a valid SVG` | Missing `<svg>` tag |
+| `.woff file path is required` | Missing woff-path argument |
+| `Existing .woff not found` | Provided .woff doesn't exist |
+| `Icon "rvi-xxx" not found` | Update target doesn't exist |
+| `Server start failed` | Cannot start WOFF Tool server |
+
+
+
 ## Testing
 
 ```bash
