@@ -1,9 +1,8 @@
 {
   "mcpServers": {
     "woff-tool": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "node",
         "./mcp-server.mjs"
       ]
     }

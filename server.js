@@ -5,12 +5,86 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { Readable } = require('stream');
+const http = require('http');
+const { Server } = require('socket.io');
 const opentype = require('opentype.js');
 const { buildCssText } = require('./lib/build-css');
 const { normalizeSvg } = require('./lib/normalize-svg');
+const { parseChannelUrl, normalizeIconPayload } = require('./lib/socket-sync');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+  },
+});
+
+const channelState = new Map();
+
+function upsertChannelGlyphs(channel, glyphs) {
+  channelState.set(channel, {
+    updatedAt: new Date().toISOString(),
+    glyphs,
+  });
+}
+
+function getChannelGlyphs(channel) {
+  return channelState.get(channel)?.glyphs || [];
+}
+
+io.on('connection', (socket) => {
+  socket.on('join-channel', ({ channel }) => {
+    if (!channel || typeof channel !== 'string') {
+      socket.emit('channel-error', { error: 'channel is required' });
+      return;
+    }
+
+    socket.join(channel);
+    socket.emit('channel-joined', {
+      channel,
+      glyphCount: getChannelGlyphs(channel).length,
+    });
+  });
+
+  socket.on('sync-glyphs', ({ channel, glyphs }) => {
+    try {
+      const normalized = normalizeIconPayload(glyphs);
+      upsertChannelGlyphs(channel, normalized);
+      io.to(channel).emit('glyphs-updated', {
+        channel,
+        glyphs: normalized,
+      });
+    } catch (error) {
+      socket.emit('channel-error', { error: error.message });
+    }
+  });
+
+  socket.on('request-glyphs', ({ channel }) => {
+    socket.emit('glyphs-current', {
+      channel,
+      glyphs: getChannelGlyphs(channel),
+    });
+  });
+
+  socket.on('add-icons', ({ channel, icons }) => {
+    try {
+      const existing = getChannelGlyphs(channel);
+      const incoming = normalizeIconPayload(icons);
+      const merged = [...existing, ...incoming];
+      upsertChannelGlyphs(channel, merged);
+      io.to(channel).emit('glyphs-updated', {
+        channel,
+        glyphs: merged,
+      });
+    } catch (error) {
+      socket.emit('channel-error', { error: error.message });
+    }
+  });
+});
 
 app.use(cors());
 app.use(express.json());
@@ -422,10 +496,34 @@ app.get('*', (req, res) => {
 });
 
 // Only start the server when run directly (allows testing without port binding)
+app.post('/api/socket/sync-from-channel', async (req, res) => {
+  try {
+    const { channelUrl, fontName = 'CustomFont' } = req.body || {};
+    const { channel } = parseChannelUrl(channelUrl);
+    const glyphs = getChannelGlyphs(channel);
+
+    if (!glyphs.length) {
+      return res.status(404).json({ error: `No glyphs found for channel "${channel}".` });
+    }
+
+    const woffBuffer = await generateWoff([], fontName, null, glyphs);
+    persistLatestBundle(woffBuffer, glyphs, fontName, req.body?.cssPrefix || 'icon');
+
+    res.json({
+      success: true,
+      channel,
+      glyphCount: glyphs.length,
+      latestDir: LATEST_DIR,
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 if (require.main === module) {
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`✨ WOFF Tool running at http://localhost:${PORT}`);
   });
 }
 
-module.exports = { app, buildCssText, normalizeSvg, persistLatestBundle };
+module.exports = { app, server, io, buildCssText, normalizeSvg, persistLatestBundle };

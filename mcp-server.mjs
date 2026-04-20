@@ -17,11 +17,13 @@
  *   {
  *     "mcpServers": {
  *       "woff-tool": {
- *         "command": "node",
- *         "args": ["/path/to/convert-font/mcp-server.js"]
+ *         "command": "npx",
+ *         "args": ["-y", "woff-tool"]
  *       }
  *     }
  *   }
+ *
+ * (Requires the woff-tool package to be installed or accessible via npx)
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';

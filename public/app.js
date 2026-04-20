@@ -18,6 +18,8 @@
     normAlignH: 'center',
     normAlignV: 'center',
     searchQuery: '',           // current search/filter text
+    channelId: new URL(window.location.href).searchParams.get('channel') || new URL(window.location.href).searchParams.get('chanel') || null,
+    socketConnected: false,
   };
 
   function nextId() { return ++_idCounter; }

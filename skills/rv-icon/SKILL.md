@@ -1,11 +1,6 @@
 ---
 name: rv-icon
-description: >
-  Use this skill when the user asks to add or update SVG icons in an existing
-  icon font (.woff). Automates reading a local SVG, normalizing the icon name
-  with rvi- kebab-case prefix, resolving duplicates, importing/updating the icon
-  (resized to 28×28 centered), sorting icons by name, reindexing all glyphs,
-  exporting the updated .woff, generating CSS, and syncing results back.
+description: Use this skill when the user asks to add or update SVG icons in an existing icon font (.woff). Automates reading a local SVG, normalizing the icon name with rvi- kebab-case prefix, resolving duplicates, importing/updating the icon (resized to 28×28 centered), sorting icons by name, reindexing all glyphs, exporting the updated .woff, generating CSS, and syncing results back.
 ---
 
 # Icon Font Management Skill
