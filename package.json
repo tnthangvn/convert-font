@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Internal WOFF font generation tool — load/create WOFF, add SVG glyphs, generate & download",
   "main": "server.js",
+  "packageManager": "pnpm@10.20.0",
   "bin": {
     "woff-tool": "./mcp-server.mjs"
   },
@@ -35,5 +36,8 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
