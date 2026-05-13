@@ -105,30 +105,42 @@ function sanitizeGlyphName(filename) {
     || 'glyph';
 }
 
+function pathCommandsToData(commands, yTransform = null) {
+  if (!Array.isArray(commands) || commands.length === 0) return '';
+  const y = (value) => yTransform ? yTransform(value) : value;
+  return commands.map((cmd) => {
+    switch (cmd.type) {
+      case 'M': return `M ${cmd.x} ${y(cmd.y)}`;
+      case 'L': return `L ${cmd.x} ${y(cmd.y)}`;
+      case 'C': return `C ${cmd.x1} ${y(cmd.y1)} ${cmd.x2} ${y(cmd.y2)} ${cmd.x} ${y(cmd.y)}`;
+      case 'Q': return `Q ${cmd.x1} ${y(cmd.y1)} ${cmd.x} ${y(cmd.y)}`;
+      case 'A': return `A ${cmd.rX} ${cmd.rY} ${cmd.xRot} ${cmd.lArcFlag} ${cmd.sweepFlag ? 0 : 1} ${cmd.x} ${y(cmd.y)}`;
+      case 'Z': return 'Z';
+      default: return '';
+    }
+  }).filter(Boolean).join(' ');
+}
+
 /**
  * Parse an existing .woff file and return glyph metadata.
  */
 function parseWoff(buffer) {
-  const font = opentype.parse(buffer.buffer, { lowMemory: false });
+  const fontBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  const font = opentype.parse(fontBuffer, { lowMemory: false });
   const ascender = font.ascender || font.unitsPerEm * 0.8;
+  const unitsPerEm = font.unitsPerEm || 1000;
   const glyphs = [];
+
   for (let i = 0; i < font.glyphs.length; i++) {
     const g = font.glyphs.get(i);
     if (!g.unicode && g.index !== 0) continue;
-    // Convert glyph path to SVG path data
-    // Position baseline at y = ascender so the glyph fits within viewBox(0 0 upm upm)
+
     let svgPath = '';
     try {
-      const p = g.getPath(0, ascender, font.unitsPerEm || 1000);
-      if (p.toPathData) {
-        svgPath = p.toPathData();
-      } else if (p.toSVG) {
-        // toSVG returns '<path d="..."/>', extract just the d attribute
-        const svgStr = p.toSVG();
-        const match = svgStr.match(/d="([^"]*)"/); 
-        svgPath = match ? match[1] : '';
-      }
+      const commands = g.path?.commands || (typeof g.getPath === 'function' ? g.getPath(0, 0, unitsPerEm).commands : null);
+      svgPath = pathCommandsToData(commands, (value) => unitsPerEm - value);
     } catch (_) { /* ignore */ }
+
     glyphs.push({
       index: g.index,
       name: g.name || `glyph_${g.index}`,
@@ -140,7 +152,7 @@ function parseWoff(buffer) {
   }
   return {
     fontFamily: font.names?.fontFamily?.en || font.names?.fontFamily || 'Unknown',
-    unitsPerEm: font.unitsPerEm,
+    unitsPerEm,
     ascender,
     numGlyphs: font.glyphs.length,
     glyphs,
@@ -159,6 +171,7 @@ async function generateWoff(svgItems, fontName = 'CustomFont', existingWoffBuffe
 
   // Determine starting codepoint (Private Use Area)
   let nextCodepoint = 0xE001;
+  const skippedGlyphs = [];
 
   // If glyphMeta is provided, the client is sending the full ordered list
   // with user-defined names and codepoints
@@ -203,6 +216,28 @@ async function generateWoff(svgItems, fontName = 'CustomFont', existingWoffBuffe
         svgContent: item.svgContent,
       });
     }
+  }
+
+  if (allSvgItems.length === 0) {
+    throw new Error('No glyphs to generate. Please add at least one SVG file.');
+  }
+
+  const validSvgItems = [];
+  for (const item of allSvgItems) {
+    try {
+      const normalized = normalizeSvg(item.svgContent);
+      validSvgItems.push({ ...item, svgContent: normalized.svgContent });
+    } catch (error) {
+      skippedGlyphs.push(item.name || 'glyph');
+    }
+  }
+
+  if (validSvgItems.length === 0) {
+    throw new Error('No valid SVG glyphs to generate.');
+  }
+
+  if (skippedGlyphs.length > 0) {
+    console.warn(`Skipped invalid glyphs: ${skippedGlyphs.join(', ')}`);
   }
 
   if (allSvgItems.length === 0) {

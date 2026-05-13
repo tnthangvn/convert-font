@@ -35,7 +35,8 @@
     "ttf2woff": "^3.0.0"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@opendesign/sdk": "^0.4.5"
   },
   "engines": {
     "node": "22.x"

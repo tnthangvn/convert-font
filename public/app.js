@@ -20,6 +20,7 @@
     searchQuery: '',           // current search/filter text
     channelId: new URL(window.location.href).searchParams.get('channel') || new URL(window.location.href).searchParams.get('chanel') || null,
     socketConnected: false,
+    theme: localStorage.getItem('woff_theme') || 'system',
   };
 
   function nextId() { return ++_idCounter; }
@@ -74,6 +75,9 @@
   const searchInput = $('#searchInput');
   const btnClearSearch = $('#btnClearSearch');
   const searchResultCount = $('#searchResultCount');
+  const themeToggle = $('#themeToggle');
+  const themeToggleLabel = $('#themeToggleLabel');
+  const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
   // ── Helpers ────────────────────────────────────────────
   function show(el) { if (el) el.classList.remove('hidden'); }
@@ -85,6 +89,35 @@
   }
 
   function hideError() { hide(errorBar); }
+
+  function getEffectiveTheme() {
+    return state.theme === 'system' ? (systemThemeQuery.matches ? 'dark' : 'light') : state.theme;
+  }
+
+  function applyTheme() {
+    const effectiveTheme = getEffectiveTheme();
+
+    if (state.theme === 'system') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.dataset.theme = state.theme;
+    }
+
+    if (themeToggle) {
+      themeToggle.setAttribute('aria-pressed', String(effectiveTheme === 'dark'));
+      themeToggle.setAttribute('aria-label', effectiveTheme === 'dark' ? 'Use light mode' : 'Use dark mode');
+    }
+
+    if (themeToggleLabel) {
+      themeToggleLabel.textContent = state.theme === 'system' ? 'System' : (state.theme === 'dark' ? 'Dark' : 'Light');
+    }
+  }
+
+  function cycleTheme() {
+    state.theme = state.theme === 'system' ? 'dark' : state.theme === 'dark' ? 'light' : 'system';
+    localStorage.setItem('woff_theme', state.theme);
+    applyTheme();
+  }
 
   function formatBytes(bytes) {
     if (bytes < 1024) return bytes + ' B';
@@ -870,6 +903,14 @@
   }
 
   // ── Event Listeners ────────────────────────────────────
+
+  applyTheme();
+  if (themeToggle) themeToggle.addEventListener('click', cycleTheme);
+  if (systemThemeQuery.addEventListener) {
+    systemThemeQuery.addEventListener('change', applyTheme);
+  } else if (systemThemeQuery.addListener) {
+    systemThemeQuery.addListener(applyTheme);
+  }
 
   // Start mode — WOFF drop zone
   btnBrowseWoff.addEventListener('click', (e) => {

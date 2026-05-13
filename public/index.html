@@ -7,7 +7,7 @@
   <title>WOFF Tool — Font Generator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Montserrat:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="index.css">
 </head>
 <body>
@@ -22,7 +22,14 @@
         </svg>
         <h1 class="header__title">WOFF Tool</h1>
       </div>
-      <span class="header__badge">v1</span>
+      <div class="header__actions">
+        <span class="header__badge">v1</span>
+        <button id="themeToggle" class="theme-toggle" type="button" aria-label="Use dark mode" aria-pressed="false">
+          <span class="theme-toggle__icon theme-toggle__icon--light" aria-hidden="true">☀</span>
+          <span class="theme-toggle__icon theme-toggle__icon--dark" aria-hidden="true">☾</span>
+          <span id="themeToggleLabel" class="theme-toggle__label">System</span>
+        </button>
+      </div>
     </header>
 
     <!-- Main Content -->
@@ -30,8 +37,8 @@
 
       <!-- Step: Start Mode -->
       <section id="startSection" class="section section--start">
-        <h2 class="section__heading">Get Started</h2>
-        <p class="section__desc">Drop a <code>.woff</code> file below to edit, or create a new font set from scratch.</p>
+        <h2 class="section__heading">Build icon fonts faster.</h2>
+        <p class="section__desc">Open a <code>.woff</code> to inspect existing glyphs, or create a fresh icon font from SVGs with normalization, CSS preview, and export actions in one workspace.</p>
 
         <!-- Woff Drop Zone -->
         <div id="woffDropZone" class="woff-drop-zone">

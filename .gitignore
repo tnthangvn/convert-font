@@ -10,3 +10,4 @@ logs
 .worktrees
 worktrees/
 graphify-out/cache
+.ace-tool/

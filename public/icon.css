@@ -17,6 +17,7 @@
   line-height: 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  display: inline-block;
 }
 .rvi-football:before,
 .rvi-bong-da-3:before,
