@@ -32,7 +32,8 @@
     "socket.io-client": "^4.8.1",
     "svg2ttf": "^6.0.3",
     "svgicons2svgfont": "^15.0.1",
-    "ttf2woff": "^3.0.0"
+    "ttf2woff": "^3.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

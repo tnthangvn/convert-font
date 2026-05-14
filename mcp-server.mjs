@@ -28,12 +28,44 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { randomUUID } from 'crypto';
+
+const A_BASE_URL = process.env.WOFF_TOOL_URL || 'http://localhost:3456';
+
+function fetchJson(path, options = {}) {
+  return fetch(`${A_BASE_URL}${path}`, options);
+}
+
+function ensureTmpFile(prefix, content) {
+  const file = join(TMP_DIR, `${prefix}-${randomUUID()}.woff`);
+  writeFileSync(file, content);
+  return file;
+}
+
+function cleanup(file) {
+  try { unlinkSync(file); } catch {}
+}
+
+async function postMultipart(path, filePath, fieldName = 'woffFile') {
+  const form = new FormData();
+  form.append(fieldName, new Blob([readFileSync(filePath)]), 'upload.woff');
+  return fetchJson(path, { method: 'POST', body: form });
+}
+
+async function postJson(path, body) {
+  return fetchJson(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LATEST_DIR = join(__dirname, 'data', 'latest');
+const TMP_DIR = join(__dirname, 'data', 'tmp');
 
 const server = new McpServer({
   name: 'woff-tool',
@@ -100,6 +132,100 @@ server.resource(
       ],
     };
   }
+);
+
+server.registerTool(
+  'get_connection',
+  {
+    description: 'Get active WOFF Tool service status',
+  },
+  async ({ channel }) => {
+    const res = await fetchJson(`/api/channel/${encodeURIComponent(channel)}/status`);
+    return { content: [{ type: 'text', text: await res.text() }] };
+  }
+);
+
+server.registerTool(
+  'join_channel',
+  {
+    description: 'Join current channel through HTTP-backed MCP control',
+  },
+  async ({ channel }) => {
+    const res = await fetchJson(`/api/channel/${encodeURIComponent(channel)}/status`);
+    return { content: [{ type: 'text', text: await res.text() }] };
+  }
+);
+
+server.registerTool(
+  'sync_channel_icons',
+  {
+    description: 'Mutate channel icons',
+  },
+  async ({ channel, action, icons, fontName, cssPrefix }) => {
+    const res = await postJson(`/api/channel/${encodeURIComponent(channel)}/icons`, {
+      action,
+      icons,
+      fontName,
+      cssPrefix,
+    });
+    return { content: [{ type: 'text', text: await res.text() }] };
+  }
+);
+
+server.registerTool(
+  'get_channel_export',
+  {
+    description: 'Get current channel export payload',
+  },
+  async ({ channel }) => {
+    const res = await fetchJson(`/api/channel/${encodeURIComponent(channel)}/export`);
+    return { content: [{ type: 'text', text: await res.text() }] };
+  }
+);
+
+server.registerTool(
+  'parse_woff_preview',
+  {
+    description: 'Send WOFF to A for preview parsing',
+  },
+  async ({ filePath }) => {
+    const res = await postMultipart('/api/socket/parse-woff-preview', filePath);
+    return { content: [{ type: 'text', text: await res.text() }] };
+  }
+);
+
+server.registerTool(
+  'get_channel_bundle',
+  {
+    description: 'Get current channel WOFF and CSS payload',
+  },
+  async ({ channel }) => {
+    const res = await fetchJson(`/api/channel/${encodeURIComponent(channel)}/export`);
+    return { content: [{ type: 'text', text: await res.text() }] };
+  }
+);
+
+server.registerTool(
+  'sync_from_channel',
+  {
+    description: 'Sync latest glyph state from a channel',
+  },
+  async ({ channel, fontName, cssPrefix }) => {
+    const res = await postJson('/api/socket/sync-from-channel', {
+      channelUrl: `${A_BASE_URL}?channel=${encodeURIComponent(channel)}`,
+      fontName,
+      cssPrefix,
+    });
+    return { content: [{ type: 'text', text: await res.text() }] };
+  }
+);
+
+server.registerTool(
+  'get_ui_url',
+  {
+    description: 'Get WOFF Tool UI URL',
+  },
+  async () => ({ content: [{ type: 'text', text: A_BASE_URL }] })
 );
 
 // ── Start ──────────────────────────────────────────────────────

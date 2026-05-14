@@ -10,16 +10,15 @@
     glyphs: [],                // unified: { id, name, codepoint, svgContent, originalSvgContent, svgPathData, isNew, file, unitsPerEm }
     generatedBlob: null,
     fontName: 'CustomFont',
+    syncPath: '~/Desktop/RV-Icon.woff',
+    syncStatus: null,
+    syncBusy: false,
     codepointStart: 0xE001,
     cssPrefix: sessionStorage.getItem('woff_cssPrefix') || 'icon',
-    cssPreviewText: null,      // cached CSS preview text (invalidated on changes)
-    normWidth: 28,
-    normHeight: 28,
-    normAlignH: 'center',
-    normAlignV: 'center',
-    searchQuery: '',           // current search/filter text
-    channelId: new URL(window.location.href).searchParams.get('channel') || new URL(window.location.href).searchParams.get('chanel') || null,
-    socketConnected: false,
+    cssPreviewText: null,
+    cssPreviewPayload: null,
+    exportPayload: null,
+    woffPreviewPayload: null,
     theme: localStorage.getItem('woff_theme') || 'system',
   };
 
@@ -32,19 +31,15 @@
   const woffDropZone = $('#woffDropZone');
   const btnBrowseWoff = $('#btnBrowseWoff');
   const btnCreateNew = $('#btnCreateNew');
-  const btnBackToStart = $('#btnBackToStart');
-  const woffInput = $('#woffInput');
-  const svgInput = $('#svgInput');
-  const btnBrowseSvg = $('#btnBrowseSvg');
-  const dropZone = $('#dropZone');
-  const fontNameInput = $('#fontNameInput');
-  const fontNameDisplay = $('#fontNameDisplay');
   const glyphCountBadge = $('#glyphCountBadge');
   const glyphListWrapper = $('#glyphListWrapper');
   const glyphList = $('#glyphList');
   const generateActions = $('#generateActions');
   const btnGenerate = $('#btnGenerate');
+  const btnSyncFileFont = $('#btnSyncFileFont');
   const btnExportCss = $('#btnExportCss');
+  const syncPathInput = $('#syncPathInput');
+  const syncPathField = syncPathInput?.closest('.sync-bar');
   const statusBar = $('#statusBar');
   const statusText = $('#statusText');
   const errorBar = $('#errorBar');
@@ -88,6 +83,73 @@
     show(errorBar);
   }
 
+  function setConnectionState({ socketConnected, channel, meta, isBrowser }) {
+    if (typeof socketConnected === 'boolean') state.socketConnected = socketConnected;
+    if (typeof isBrowser === 'boolean') state.isBrowser = isBrowser;
+    if (channel) state.activeChannel = channel;
+    if (meta !== undefined) state.channelMeta = meta;
+  }
+
+  function currentChannel() {
+    return state.activeChannel || state.channelId || null;
+  }
+
+  function renderConnectionState() {
+    const channel = currentChannel() || 'none';
+    const socket = state.socketConnected ? 'Socket connected' : 'Socket disconnected';
+    if (statusText) statusText.textContent = `${socket} · channel ${channel}`;
+  }
+
+  function setPreviewPending(job) {
+    pendingPreviewJob = job || null;
+    state.previewPending = Boolean(job);
+  }
+
+  function shouldAcceptPreview(payload = {}) {
+    if (!payload.jobId) return true;
+    if (latestPreviewJob && payload.jobId < latestPreviewJob.jobId) return false;
+    return true;
+  }
+
+  function applyPreviewResult(payload = {}) {
+    if (!shouldAcceptPreview(payload)) return;
+    latestPreviewJob = { jobId: payload.jobId || null, createdAt: payload.createdAt || null };
+    setPreviewPending(null);
+    const result = payload.result || payload;
+    state.woffPreviewPayload = result;
+    state.fontName = result.fontFamily || state.fontName;
+    fontNameInput.value = state.fontName;
+    fontNameDisplay.textContent = state.fontName;
+    if (result.fontFamily) state.fontName = result.fontFamily;
+    if (syncPathInput && !syncPathInput.value) syncPathInput.value = state.syncPath;
+    state.syncPath = syncPathInput?.value || state.syncPath;
+    if (syncPathInput) syncPathInput.value = state.syncPath;
+    if (fontNameInput) fontNameInput.value = state.fontName;
+    if (fontNameDisplay) fontNameDisplay.textContent = state.fontName;
+
+    state.glyphs = (result.glyphs || []).map((g) => ({
+      id: nextId(),
+      name: g.name || `glyph_${g.index}`,
+      codepoint: g.unicode || null,
+      svgContent: g.svgPathData ? buildSvgFromPath(g.svgPathData, result.unitsPerEm || 1000) : null,
+      originalSvgContent: g.svgPathData ? buildSvgFromPath(g.svgPathData, result.unitsPerEm || 1000) : null,
+      svgPathData: g.svgPathData || null,
+      isNew: false,
+      file: null,
+      unitsPerEm: result.unitsPerEm || 1000,
+    })).filter((g) => g.svgContent || g.svgPathData);
+    renderGlyphList();
+  }
+
+  async function fetchChannelStatus(channel) {
+    const res = await fetch(`/api/channel/${encodeURIComponent(channel)}/export`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to read channel status.');
+    setConnectionState({ channel, meta: data.meta });
+    renderConnectionState();
+    return data;
+  }
+
   function hideError() { hide(errorBar); }
 
   function getEffectiveTheme() {
@@ -126,7 +188,85 @@
   }
 
   function sanitizeName(filename) {
-    return filename.replace(/\.svg$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_').replace(/^_+|_+$/g, '') || 'glyph';
+    return filename.replace(/\.[^.]+$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_').replace(/^_+|_+$/g, '') || 'glyph';
+  }
+
+  function sanitizeFontName(filename) {
+    return sanitizeName(filename) || 'CustomFont';
+  }
+
+  function resolveSyncPath(rawPath) {
+    const trimmed = String(rawPath || '').trim();
+    if (!trimmed) return '';
+    return trimmed;
+  }
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  }
+
+  function setSyncStatus(message, isError = false) {
+    state.syncStatus = { message, isError };
+    if (statusText) statusText.textContent = message;
+    if (statusBar) show(statusBar);
+    if (errorBar) {
+      if (isError) showError(message);
+      else hideError();
+    }
+  }
+
+  function deriveFontNameFromFile(file) {
+    const name = sanitizeFontName(file?.name || '');
+    return name && name !== 'glyph' ? name : 'CustomFont';
+  }
+
+  function updateFontNameFromFile(file) {
+    const nextName = deriveFontNameFromFile(file);
+    state.fontName = nextName;
+    if (fontNameInput) fontNameInput.value = nextName;
+    if (fontNameDisplay) fontNameDisplay.textContent = nextName;
+  }
+
+  function normalizeSyncPathInput() {
+    if (!syncPathInput) return;
+    const value = syncPathInput.value.trim();
+    if (value && !value.toLowerCase().endsWith('.woff')) {
+      syncPathInput.value = `${value}.woff`;
+    }
+  }
+
+  async function blobToBase64(blob) {
+    const buffer = await blob.arrayBuffer();
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+
+  function downloadBlob(blob, filename, mimeType = 'font/woff') {
+    const url = URL.createObjectURL(new Blob([blob], { type: mimeType }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function setBusy(button, busy, label) {
+    if (!button) return;
+    button.disabled = busy;
+    if (label !== undefined) button.dataset.originalLabel = button.dataset.originalLabel || button.innerHTML;
+    if (busy && label) button.innerHTML = label;
+    if (!busy && button.dataset.originalLabel) button.innerHTML = button.dataset.originalLabel;
+  }
+
+  function toast(message, isError = false) {
+    if (statusText) statusText.textContent = message;
+    if (statusBar) show(statusBar);
+    if (isError) showError(message);
+    else hideError();
   }
 
   function codepointToHex(cp) {
@@ -147,14 +287,191 @@
   }
 
   // ── Navigation ─────────────────────────────────────────
+  let socket = null;
+  let reconnectTimer = null;
+  let joinedChannel = null;
+  let socketHandlersAttached = false;
+  let lastChannelSyncAt = 0;
+  let lastPreviewRequestAt = 0;
+  let lastSyncRequestAt = 0;
+  let reconnectInFlight = false;
+  let channelStateCache = null;
+  let pendingSocketJoin = null;
+  let pendingPreviewJob = null;
+  let latestPreviewJob = null;
+
+  async function ensureChannelConnected() {
+    const channel = currentChannel();
+    if (!channel) return;
+    if (reconnectInFlight) return;
+    reconnectInFlight = true;
+    try {
+      const status = await fetchChannelStatus(channel);
+      channelStateCache = status;
+      setConnectionState({ socketConnected: true, channel, meta: status.meta });
+      renderConnectionState();
+      if (!socket || socket.connected === false) return;
+      if (joinedChannel !== channel) {
+        if (joinedChannel) socket.emit('leave-preview-channel', { channel: joinedChannel });
+        socket.emit('join-preview-channel', { channel });
+        joinedChannel = channel;
+      }
+    } finally {
+      reconnectInFlight = false;
+    }
+  }
+
+  function replayLatestPreviewIfAny(payload) {
+    if (!payload || !payload.result) return;
+    applyPreviewResult(payload);
+  }
+
+  function safeJoinChannel(channel) {
+    if (!socket || !channel) return;
+    if (pendingSocketJoin === channel || joinedChannel === channel) return;
+    pendingSocketJoin = channel;
+    socket.emit('join-preview-channel', { channel });
+  }
+
+  function safeLeaveChannel(channel) {
+    if (!socket || !channel) return;
+    if (joinedChannel !== channel) return;
+    socket.emit('leave-preview-channel', { channel });
+    joinedChannel = null;
+  }
+
+  function safeLeaveChannel(channel) {
+    if (!socket || !channel) return;
+    if (joinedChannel !== channel) return;
+    socket.emit('leave-preview-channel', { channel });
+    joinedChannel = null;
+  }
+
+  async function refreshChannelState() {
+    const channel = currentChannel();
+    if (!channel) return;
+    const status = await fetchChannelStatus(channel);
+    channelStateCache = status;
+    return status;
+  }
+
+  async function onReconnect() {
+    await ensureChannelConnected();
+  }
+
+  async function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(async () => {
+      reconnectTimer = null;
+      state.reconnectAttempts += 1;
+      try {
+        await ensureChannelConnected();
+      } catch (err) {
+        setConnectionState({ socketConnected: false });
+        renderConnectionState();
+        scheduleReconnect();
+      }
+    }, Math.min(30000, 1000 * Math.max(1, state.reconnectAttempts + 1)));
+  }
+
+  function detachSocketHandlers() {
+    if (!socket || !socketHandlersAttached) return;
+    socket.removeAllListeners();
+    socketHandlersAttached = false;
+  }
+
+  function attachSocketHandlers(nextSocket) {
+    detachSocketHandlers();
+    socket = nextSocket;
+    socketHandlersAttached = true;
+
+    socket.on('connect', async () => {
+      state.reconnectAttempts = 0;
+      setConnectionState({ socketConnected: true, isBrowser: true });
+      renderConnectionState();
+      await onReconnect();
+    });
+
+    socket.on('disconnect', () => {
+      setConnectionState({ socketConnected: false });
+      renderConnectionState();
+      scheduleReconnect();
+    });
+
+    socket.on('channel-joined', (payload = {}) => {
+      joinedChannel = payload.channel || joinedChannel;
+      pendingSocketJoin = null;
+      setConnectionState({ channel: payload.channel, meta: payload.meta, socketConnected: true });
+      renderConnectionState();
+      replayLatestPreviewIfAny(payload.latestPreview);
+    });
+
+    socket.on('channel-roster', (payload = {}) => {
+    });
+
+    socket.on('preview-ready', (payload = {}) => {
+      if (payload.channel && payload.channel !== currentChannel()) return;
+      if (!shouldAcceptPreview(payload)) return;
+      joinedChannel = payload.channel || joinedChannel;
+      pendingSocketJoin = null;
+      applyPreviewResult(payload);
+      setConnectionState({ channel: payload.channel, socketConnected: true });
+      renderConnectionState();
+    });
+
+    socket.on('browser-preview-ready', (payload = {}) => {
+      if (payload.channel && payload.channel !== currentChannel()) return;
+      if (!state.socketConnected) return;
+      if (!state.isBrowser) return;
+      if (!shouldAcceptPreview(payload)) return;
+      joinedChannel = payload.channel || joinedChannel;
+      pendingSocketJoin = null;
+      applyPreviewResult(payload);
+      setConnectionState({ channel: payload.channel, socketConnected: true });
+      renderConnectionState();
+    });
+
+    socket.on('preview-error', (payload = {}) => {
+      if (payload.channel && payload.channel !== currentChannel()) return;
+      setPreviewPending(null);
+      showError(payload.error || 'Preview error.');
+      renderConnectionState();
+    });
+
+    socket.on('glyphs-updated', (payload = {}) => {
+      joinedChannel = payload.channel || joinedChannel;
+      pendingSocketJoin = null;
+      setConnectionState({ channel: payload.channel, meta: payload.meta, socketConnected: true });
+      renderConnectionState();
+    });
+
+    socket.on('glyphs-current', (payload = {}) => {
+      joinedChannel = payload.channel || joinedChannel;
+      pendingSocketJoin = null;
+      setConnectionState({ channel: payload.channel, socketConnected: true });
+      renderConnectionState();
+    });
+
+    socket.on('channel-error', (payload = {}) => {
+      showError(payload.error || 'Channel error.');
+      pendingSocketJoin = null;
+      setPreviewPending(null);
+      setConnectionState({ socketConnected: false });
+      renderConnectionState();
+    });
+  }
+
   function goToStart() {
     state.mode = 'start';
     state.existingWoffFile = null;
     state.glyphs = [];
     state.generatedBlob = null;
     state.fontName = 'CustomFont';
+    state.syncPath = '~/Desktop/RV-Icon.woff';
     state.cssPreviewText = null;
-    fontNameInput.value = 'CustomFont';
+    if (fontNameInput) fontNameInput.value = 'CustomFont';
+    if (syncPathInput) syncPathInput.value = state.syncPath;
+    if (btnSyncFileFont) btnSyncFileFont.disabled = false;
 
     show(startSection);
     hide(workspaceSection);
@@ -164,6 +481,23 @@
   }
 
   function goToWorkspace(fontName, existingGlyphs) {
+    joinedChannel = currentChannel();
+    pendingSocketJoin = null;
+    channelStateCache = null;
+    lastChannelSyncAt = 0;
+    lastPreviewRequestAt = 0;
+    lastSyncRequestAt = 0;
+
+    if (socket && joinedChannel) {
+      safeJoinChannel(joinedChannel);
+    }
+
+    if (socket && socket.connected) {
+      ensureChannelConnected().catch(() => {});
+    }
+
+    renderConnectionState();
+
     state.mode = 'workspace';
     state.fontName = fontName || 'CustomFont';
     state.generatedBlob = null;
@@ -439,6 +773,8 @@
       state.glyphs.splice(index, 1);
       reindexGlyphs();
       renderGlyphList();
+      invalidateCssPreview();
+      void syncCurrentChannel('delete', [glyph]);
     });
 
     // Drag handle indicator
@@ -471,6 +807,7 @@
       nameEl.textContent = newName;
       if (newName !== currentName) {
         invalidateCssPreview();
+        void syncCurrentChannel('update', [glyph]);
       }
     }
 
@@ -644,30 +981,116 @@
     statusText.textContent = 'Parsing .woff file...';
 
     try {
-      const formData = new FormData();
-      formData.append('woffFile', file);
-
-      const res = await fetch('/api/parse-woff', { method: 'POST', body: formData });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to parse .woff file.');
-      }
+      const response = await fetch('/api/socket/parse-woff-preview', {
+        method: 'POST',
+        body: (() => {
+          const formData = new FormData();
+          formData.append('woffFile', file);
+          formData.append('channel', currentChannel() || 'preview');
+          formData.append('jobId', `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+          setPreviewPending({ jobId: formData.get('jobId'), createdAt: Date.now() });
+          return formData;
+        })(),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || 'Failed to parse .woff preview.');
+      const parsed = json.content ? JSON.parse(json.content[0].text) : json;
 
       state.existingWoffFile = file;
+      updateFontNameFromFile(file);
+      if (parsed.meta?.channel) {
+        state.activeChannel = parsed.meta.channel;
+      }
+      if (!parsed.meta?.channel && !state.activeChannel) {
+        state.activeChannel = 'preview';
+      }
+      setConnectionState({ socketConnected: true, channel: parsed.meta?.channel || state.activeChannel, meta: parsed.meta });
+      renderConnectionState();
+      if (parsed.meta?.channel) {
+        await refreshChannelState().catch(() => {});
+      }
+      if (parsed.meta) channelStateCache = parsed.meta;
+      if (socket && parsed.meta?.channel) {
+        safeJoinChannel(parsed.meta.channel);
+      }
 
-      // Pass parsed data with unitsPerEm
-      const glyphsWithUPE = (data.glyphs || []).map(g => ({
+      const glyphsWithUPE = (parsed.glyphs || []).map(g => ({
         ...g,
-        unitsPerEm: data.unitsPerEm || 1000,
+        unitsPerEm: parsed.unitsPerEm || 1000,
       }));
 
       hide(statusBar);
-      goToWorkspace(data.fontFamily, glyphsWithUPE);
+      goToWorkspace(state.fontName, glyphsWithUPE);
     } catch (err) {
       hide(statusBar);
       showError(err.message);
     }
+  }
+
+  async function handleSyncFileFont() {
+    hideError();
+    normalizeSyncPathInput();
+    const syncPath = resolveSyncPath(syncPathInput?.value || state.syncPath);
+    if (!syncPath) {
+      showError('Sync path required.');
+      return;
+    }
+
+    state.syncPath = syncPathInput?.value || state.syncPath;
+    if (!state.generatedBlob) {
+      await handleGenerate();
+    }
+    if (!state.generatedBlob) return;
+
+    setBusy(btnSyncFileFont, true, 'Syncing...');
+    try {
+      const res = await fetch('/api/sync-file-font', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetPath: syncPath,
+          blob: await blobToBase64(state.generatedBlob),
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || 'Sync failed.');
+      toast(`Synced ${payload.targetPath}`);
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      setBusy(btnSyncFileFont, false);
+    }
+  }
+
+  async function syncCurrentChannel(action, icons) {
+    const channel = currentChannel();
+    if (!channel) return null;
+    const res = await fetch(`/api/channel/${encodeURIComponent(channel)}/icons`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        icons,
+        fontName: state.fontName,
+        cssPrefix: state.cssPrefix,
+      }),
+    });
+    const payload = await res.json();
+    channelStateCache = payload;
+    if (payload && payload.glyphs) {
+      state.glyphs = payload.glyphs.map((g, index) => ({
+        id: nextId(),
+        name: g.name || `glyph_${index}`,
+        codepoint: g.codepoint || null,
+        svgContent: g.svgContent || null,
+        originalSvgContent: g.svgContent || null,
+        svgPathData: g.svgPathData || null,
+        isNew: false,
+        file: null,
+      }));
+      renderGlyphList();
+    }
+    return payload;
   }
 
   async function handleSvgFiles(files) {
@@ -687,7 +1110,7 @@
           continue;
         }
 
-        state.glyphs.push({
+        const glyph = {
           id: nextId(),
           name: sanitizeName(file.name),
           codepoint: null,
@@ -696,7 +1119,9 @@
           svgPathData: null,
           isNew: true,
           file,
-        });
+        };
+        state.glyphs.push(glyph);
+        void syncCurrentChannel('add', [glyph]);
       } catch (err) {
         errors.push(`Failed to read "${file.name}": ${err.message}`);
       }
@@ -718,6 +1143,12 @@
     show(statusBar);
     statusText.textContent = 'Generating .woff file...';
     btnGenerate.disabled = true;
+    if (btnSyncFileFont) btnSyncFileFont.disabled = true;
+    normalizeSyncPathInput();
+    state.fontName = fontNameInput.value || state.fontName;
+    state.syncPath = syncPathInput?.value || state.syncPath;
+    if (fontNameDisplay) fontNameDisplay.textContent = state.fontName;
+    if (fontNameInput) fontNameInput.value = state.fontName;
 
     try {
       if (state.glyphs.length === 0) {
@@ -749,6 +1180,8 @@
 
       // Show download
       const fname = (fontNameInput.value || state.fontName) + '.woff';
+      state.generatedBlob = blob;
+      if (btnSyncFileFont) btnSyncFileFont.disabled = false;
       downloadFileName.textContent = fname;
       downloadFileSize.textContent = formatBytes(blob.size);
       show(downloadSection);
@@ -758,6 +1191,7 @@
       showError(err.message);
     } finally {
       btnGenerate.disabled = false;
+      if (btnSyncFileFont) btnSyncFileFont.disabled = false;
     }
   }
 
@@ -834,13 +1268,14 @@
 
       const cssText = await fetchGeneratedCss();
       state.cssPreviewText = cssText;
+      state.cssPreviewPayload = { fontFamily: fontNameInput.value.trim() || state.fontName, cssText };
 
-      // Render into the preview panel
       cssPreviewCode.classList.remove('css-preview__code--stale');
       cssPreviewCode.innerHTML = '';
       const codeEl = document.createElement('code');
       codeEl.textContent = cssText;
       cssPreviewCode.appendChild(codeEl);
+      return state.cssPreviewPayload;
 
     } catch (err) {
       showError(err.message);
@@ -905,6 +1340,13 @@
   // ── Event Listeners ────────────────────────────────────
 
   applyTheme();
+  renderConnectionState();
+  if (window.io) {
+    attachSocketHandlers(window.io(window.location.origin, { autoConnect: true, reconnection: true, auth: { isBrowser: true } }));
+  }
+  if (currentChannel()) {
+    fetchChannelStatus(currentChannel()).catch(() => {});
+  }
   if (themeToggle) themeToggle.addEventListener('click', cycleTheme);
   if (systemThemeQuery.addEventListener) {
     systemThemeQuery.addEventListener('change', applyTheme);
@@ -1028,6 +1470,13 @@
 
   // Normalization
   if (btnNormalizeAll) btnNormalizeAll.addEventListener('click', normalizeAll);
+  if (btnSyncFileFont) btnSyncFileFont.addEventListener('click', handleSyncFileFont);
+  if (syncPathInput) {
+    syncPathInput.addEventListener('change', normalizeSyncPathInput);
+    syncPathInput.addEventListener('input', () => {
+      state.syncPath = syncPathInput.value;
+    });
+  }
 
   // CSS Preview & Copy
   if (btnPreviewCss) btnPreviewCss.addEventListener('click', handlePreviewCss);

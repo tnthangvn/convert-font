@@ -1,24 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Internal WOFF font tool — load, create, and generate .woff font files from SVG glyphs with CSS preview">
+  <meta name="description"
+    content="Internal WOFF font tool — load, create, and generate .woff font files from SVG glyphs with CSS preview">
   <title>WOFF Tool — Font Generator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Montserrat:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Montserrat:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="index.css">
 </head>
+
 <body>
   <div class="app" id="app">
     <!-- Header -->
     <header class="header">
       <div class="header__brand">
         <svg class="header__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 7V4h16v3"/>
-          <path d="M9 20h6"/>
-          <path d="M12 4v16"/>
+          <path d="M4 7V4h16v3" />
+          <path d="M9 20h6" />
+          <path d="M12 4v16" />
         </svg>
         <h1 class="header__title">WOFF Tool</h1>
       </div>
@@ -38,16 +43,18 @@
       <!-- Step: Start Mode -->
       <section id="startSection" class="section section--start">
         <h2 class="section__heading">Build icon fonts faster.</h2>
-        <p class="section__desc">Open a <code>.woff</code> to inspect existing glyphs, or create a fresh icon font from SVGs with normalization, CSS preview, and export actions in one workspace.</p>
+        <p class="section__desc">Open a <code>.woff</code> to inspect existing glyphs, or create a fresh icon font from
+          SVGs with normalization, CSS preview, and export actions in one workspace.</p>
 
         <!-- Woff Drop Zone -->
         <div id="woffDropZone" class="woff-drop-zone">
           <svg class="woff-drop-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-            <polyline points="17,8 12,3 7,8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="17,8 12,3 7,8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
-          <p class="woff-drop-zone__text">Drop <code>.woff</code> file here or <button type="button" id="btnBrowseWoff" class="woff-drop-zone__link">browse</button></p>
+          <p class="woff-drop-zone__text">Drop <code>.woff</code> file here or <button type="button" id="btnBrowseWoff"
+              class="woff-drop-zone__link">browse</button></p>
           <p class="woff-drop-zone__hint">Accepts a single .woff font file</p>
           <input type="file" id="woffInput" accept=".woff" hidden>
         </div>
@@ -55,7 +62,9 @@
         <div class="start-actions start-actions--single">
           <button id="btnCreateNew" class="btn btn--secondary btn--lg" type="button">
             <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/>
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 8v8" />
+              <path d="M8 12h8" />
             </svg>
             Create New
           </button>
@@ -73,7 +82,8 @@
           <div class="workspace-bar__actions">
             <button id="btnBackToStart" class="btn btn--ghost btn--sm" type="button">
               <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
+                <path d="M19 12H5" />
+                <path d="M12 19l-7-7 7-7" />
               </svg>
               Back
             </button>
@@ -81,7 +91,7 @@
         </div>
 
         <!-- Font name input -->
-        <div class="form-group">
+        <div class="workspace-bar">
           <label for="fontNameInput" class="form-label">Font Name</label>
           <input type="text" id="fontNameInput" class="form-input" value="CustomFont" placeholder="Enter font name...">
         </div>
@@ -89,11 +99,12 @@
         <!-- Upload Zone -->
         <div id="dropZone" class="drop-zone">
           <svg class="drop-zone__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-            <polyline points="17,8 12,3 7,8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="17,8 12,3 7,8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
           </svg>
-          <p class="drop-zone__text">Drop <code>.svg</code> files here or <button type="button" id="btnBrowseSvg" class="drop-zone__link">browse</button></p>
+          <p class="drop-zone__text">Drop <code>.svg</code> files here or <button type="button" id="btnBrowseSvg"
+              class="drop-zone__link">browse</button></p>
           <p class="drop-zone__hint">Accepts multiple SVG files</p>
           <input type="file" id="svgInput" accept=".svg" multiple hidden>
         </div>
@@ -101,24 +112,34 @@
         <!-- Glyph Toolbar -->
         <div id="glyphToolbar" class="glyph-toolbar hidden">
           <div class="glyph-toolbar__left">
-            <button id="btnSortAZ" class="btn btn--ghost btn--sm" type="button" title="Sort glyphs alphabetically and re-index">
+            <button id="btnSortAZ" class="btn btn--ghost btn--sm" type="button"
+              title="Sort glyphs alphabetically and re-index">
               <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 6h7"/><path d="M3 12h10"/><path d="M3 18h5"/>
-                <path d="M17 6v12"/><path d="M14 18l3 3 3-3"/>
+                <path d="M3 6h7" />
+                <path d="M3 12h10" />
+                <path d="M3 18h5" />
+                <path d="M17 6v12" />
+                <path d="M14 18l3 3 3-3" />
               </svg>
               Sort by name
             </button>
-            <button id="btnReindex" class="btn btn--ghost btn--sm" type="button" title="Re-assign codepoints sequentially">
+            <button id="btnReindex" class="btn btn--ghost btn--sm" type="button"
+              title="Re-assign codepoints sequentially">
               <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 4h18"/><path d="M3 12h18"/><path d="M3 20h18"/>
-                <circle cx="7" cy="4" r="1" fill="currentColor"/><circle cx="7" cy="12" r="1" fill="currentColor"/><circle cx="7" cy="20" r="1" fill="currentColor"/>
+                <path d="M3 4h18" />
+                <path d="M3 12h18" />
+                <path d="M3 20h18" />
+                <circle cx="7" cy="4" r="1" fill="currentColor" />
+                <circle cx="7" cy="12" r="1" fill="currentColor" />
+                <circle cx="7" cy="20" r="1" fill="currentColor" />
               </svg>
               Re-index
             </button>
           </div>
           <div class="glyph-toolbar__right">
             <label class="glyph-toolbar__label" for="codepointStartInput">Start</label>
-            <input type="text" id="codepointStartInput" class="form-input form-input--sm" value="E001" placeholder="E001" maxlength="6">
+            <input type="text" id="codepointStartInput" class="form-input form-input--sm" value="E001"
+              placeholder="E001" maxlength="6">
           </div>
         </div>
 
@@ -127,9 +148,11 @@
           <div class="norm-panel__header">
             <h3 class="norm-panel__title">
               <svg class="norm-panel__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <path d="M9 3v18"/><path d="M15 3v18"/>
-                <path d="M3 9h18"/><path d="M3 15h18"/>
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18" />
+                <path d="M15 3v18" />
+                <path d="M3 9h18" />
+                <path d="M3 15h18" />
               </svg>
               Normalization
             </h3>
@@ -138,11 +161,13 @@
             <div class="norm-panel__fields">
               <div class="norm-panel__field">
                 <label class="form-label" for="normWidth">Width</label>
-                <input type="number" id="normWidth" class="form-input form-input--sm" value="28" min="1" max="4096" step="1">
+                <input type="number" id="normWidth" class="form-input form-input--sm" value="28" min="1" max="4096"
+                  step="1">
               </div>
               <div class="norm-panel__field">
                 <label class="form-label" for="normHeight">Height</label>
-                <input type="number" id="normHeight" class="form-input form-input--sm" value="28" min="1" max="4096" step="1">
+                <input type="number" id="normHeight" class="form-input form-input--sm" value="28" min="1" max="4096"
+                  step="1">
               </div>
               <div class="norm-panel__field">
                 <label class="form-label" for="normAlignH">Horizontal</label>
@@ -163,8 +188,10 @@
             </div>
             <button id="btnNormalizeAll" class="btn btn--secondary btn--sm norm-panel__btn" type="button">
               <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
               </svg>
               Normalize All
             </button>
@@ -175,11 +202,13 @@
         <div id="searchWrapper" class="search-wrapper hidden">
           <div class="search-bar">
             <svg class="search-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/>
-              <path d="M21 21l-4.35-4.35"/>
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
             </svg>
-            <input type="text" id="searchInput" class="search-bar__input" placeholder="Search icons by name…" autocomplete="off">
-            <button id="btnClearSearch" class="search-bar__clear hidden" type="button" title="Clear search">&times;</button>
+            <input type="text" id="searchInput" class="search-bar__input" placeholder="Search icons by name…"
+              autocomplete="off">
+            <button id="btnClearSearch" class="search-bar__clear hidden" type="button"
+              title="Clear search">&times;</button>
           </div>
           <span id="searchResultCount" class="search-bar__count hidden"></span>
         </div>
@@ -207,21 +236,22 @@
             <div class="css-preview__actions">
               <button id="btnPreviewCss" class="btn btn--ghost btn--sm" type="button">
                 <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
                 </svg>
                 Preview CSS
               </button>
               <button id="btnCopyCss" class="btn btn--ghost btn--sm" type="button" title="Copy CSS to clipboard">
                 <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
                 </svg>
                 Copy
               </button>
             </div>
           </div>
-          <p class="css-preview__hint">Click <strong>Preview CSS</strong> to generate. Changes to glyphs will require a refresh.</p>
+          <p class="css-preview__hint">Click <strong>Preview CSS</strong> to generate. Changes to glyphs will require a
+            refresh.</p>
           <pre id="cssPreviewCode" class="css-preview__code"><code>/* Click "Preview CSS" to generate */</code></pre>
         </div>
 
@@ -230,19 +260,36 @@
           <div class="generate-actions__row">
             <button id="btnGenerate" class="btn btn--accent btn--lg btn--flex" type="button">
               <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>
+                <polygon points="13,2 3,14 12,14 11,22 21,10 12,10" />
               </svg>
               Generate .woff
             </button>
             <button id="btnExportCss" class="btn btn--primary btn--lg btn--flex" type="button">
               <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                <polyline points="7,10 12,15 17,10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
+                <path d="M21 15v4a 2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                <polyline points="7,10 12,15 17,10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
               Download .css
             </button>
           </div>
+        </div>
+
+
+        <div class="sync-bar">
+          <div class="sync-bar__field">
+            <label for="syncPathInput" class="form-label">Sync Path</label>
+            <input type="text" id="syncPathInput" class="form-input" value="~/Desktop/RV-Icon.woff"
+              placeholder="~/Desktop/RV-Icon.woff">
+          </div>
+          <button id="btnSyncFileFont" class="btn btn--secondary btn--lg btn--flex" type="button">
+            <svg class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 3v12" />
+              <path d="M7 10l5 5 5-5" />
+              <path d="M5 21h14" />
+            </svg>
+            Sync file font
+          </button>
         </div>
 
         <!-- Status / Progress -->
@@ -254,7 +301,9 @@
         <!-- Error display -->
         <div id="errorBar" class="error-bar hidden">
           <svg class="error-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           <span id="errorText" class="error-bar__text"></span>
           <button id="btnDismissError" class="error-bar__dismiss" type="button">&times;</button>
@@ -264,9 +313,9 @@
         <div id="downloadSection" class="download-section hidden">
           <div class="download-card">
             <svg class="download-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-              <polyline points="7,10 12,15 17,10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="7,10 12,15 17,10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             <div class="download-card__info">
               <span id="downloadFileName" class="download-card__name">CustomFont.woff</span>
@@ -291,4 +340,5 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="app.js"></script>
 </body>
+
 </html>

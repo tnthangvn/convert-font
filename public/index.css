@@ -586,13 +586,92 @@ code {
   align-items: center;
   justify-content: space-between;
   padding: 16px 18px;
+  gap: 12px;
 }
 
 .workspace-bar__info,
-.workspace-bar__actions {
+.workspace-bar__actions,
+.workspace-bar__clients {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.workspace-bar__clients {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.client-roster {
+  margin-bottom: 6px;
+  padding: 16px 18px;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+
+.client-roster__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.client-roster__title {
+  font-size: 0.78rem;
+  font-weight: 900;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.client-roster__count {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--secondary-soft);
+  color: var(--secondary);
+  border: 1px solid var(--border);
+}
+
+.client-roster__list {
+  display: grid;
+  gap: 8px;
+}
+
+.client-roster__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.client-roster__item-name {
+  font-weight: 800;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.client-roster__item-uuid {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  word-break: break-all;
+  text-align: right;
+}
+
+.client-roster__empty {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  padding: 4px 2px;
 }
 
 .workspace-bar__name {
@@ -1130,6 +1209,43 @@ code {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
+}
+
+.generate-actions .btn--accent,
+.generate-actions .btn--primary {
+  min-height: 58px;
+  font-size: 0.96rem;
+}
+
+.sync-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  width: 100%;
+  flex-direction: column;
+}
+
+.sync-bar__field {
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sync-bar .form-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.sync-bar .form-input {
+  width: 100%;
+  min-height: 58px;
+}
+
+.sync-bar .btn {
+  flex: 0 0 auto;
+  min-height: 58px;
+  white-space: nowrap;
 }
 
 .generate-actions .btn--accent,

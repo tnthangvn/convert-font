@@ -11,3 +11,5 @@ logs
 worktrees/
 graphify-out/cache
 .ace-tool/
+.mcp.json
+.playwright-mcp
