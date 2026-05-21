@@ -83,9 +83,7 @@
     show(errorBar);
   }
 
-  function setConnectionState({ socketConnected, channel, meta, isBrowser }) {
-    if (typeof socketConnected === 'boolean') state.socketConnected = socketConnected;
-    if (typeof isBrowser === 'boolean') state.isBrowser = isBrowser;
+  function setConnectionState({ channel, meta }) {
     if (channel) state.activeChannel = channel;
     if (meta !== undefined) state.channelMeta = meta;
   }
@@ -96,8 +94,13 @@
 
   function renderConnectionState() {
     const channel = currentChannel() || 'none';
-    const socket = state.socketConnected ? 'Socket connected' : 'Socket disconnected';
-    if (statusText) statusText.textContent = `${socket} · channel ${channel}`;
+    if (statusText) statusText.textContent = `channel ${channel}`;
+  }
+
+  function refreshChannelState() {
+    const channel = currentChannel();
+    if (!channel) return Promise.resolve(null);
+    return fetchChannelStatus(channel);
   }
 
   function setPreviewPending(job) {
@@ -287,64 +290,16 @@
   }
 
   // ── Navigation ─────────────────────────────────────────
-  let socket = null;
-  let reconnectTimer = null;
-  let joinedChannel = null;
-  let socketHandlersAttached = false;
   let lastChannelSyncAt = 0;
   let lastPreviewRequestAt = 0;
   let lastSyncRequestAt = 0;
-  let reconnectInFlight = false;
   let channelStateCache = null;
-  let pendingSocketJoin = null;
   let pendingPreviewJob = null;
   let latestPreviewJob = null;
-
-  async function ensureChannelConnected() {
-    const channel = currentChannel();
-    if (!channel) return;
-    if (reconnectInFlight) return;
-    reconnectInFlight = true;
-    try {
-      const status = await fetchChannelStatus(channel);
-      channelStateCache = status;
-      setConnectionState({ socketConnected: true, channel, meta: status.meta });
-      renderConnectionState();
-      if (!socket || socket.connected === false) return;
-      if (joinedChannel !== channel) {
-        if (joinedChannel) socket.emit('leave-preview-channel', { channel: joinedChannel });
-        socket.emit('join-preview-channel', { channel });
-        joinedChannel = channel;
-      }
-    } finally {
-      reconnectInFlight = false;
-    }
-  }
 
   function replayLatestPreviewIfAny(payload) {
     if (!payload || !payload.result) return;
     applyPreviewResult(payload);
-  }
-
-  function safeJoinChannel(channel) {
-    if (!socket || !channel) return;
-    if (pendingSocketJoin === channel || joinedChannel === channel) return;
-    pendingSocketJoin = channel;
-    socket.emit('join-preview-channel', { channel });
-  }
-
-  function safeLeaveChannel(channel) {
-    if (!socket || !channel) return;
-    if (joinedChannel !== channel) return;
-    socket.emit('leave-preview-channel', { channel });
-    joinedChannel = null;
-  }
-
-  function safeLeaveChannel(channel) {
-    if (!socket || !channel) return;
-    if (joinedChannel !== channel) return;
-    socket.emit('leave-preview-channel', { channel });
-    joinedChannel = null;
   }
 
   async function refreshChannelState() {
@@ -355,110 +310,49 @@
     return status;
   }
 
-  async function onReconnect() {
-    await ensureChannelConnected();
+  function syncPreviewStateFromResponse(payload = {}) {
+    setConnectionState({ channel: payload.channel, meta: payload.meta });
+    renderConnectionState();
+    replayLatestPreviewIfAny(payload.latestPreview);
   }
 
-  async function scheduleReconnect() {
-    if (reconnectTimer) return;
-    reconnectTimer = setTimeout(async () => {
-      reconnectTimer = null;
-      state.reconnectAttempts += 1;
-      try {
-        await ensureChannelConnected();
-      } catch (err) {
-        setConnectionState({ socketConnected: false });
-        renderConnectionState();
-        scheduleReconnect();
-      }
-    }, Math.min(30000, 1000 * Math.max(1, state.reconnectAttempts + 1)));
+  function handleChannelError(payload = {}) {
+    showError(payload.error || 'Channel error.');
+    setPreviewPending(null);
+    renderConnectionState();
   }
 
-  function detachSocketHandlers() {
-    if (!socket || !socketHandlersAttached) return;
-    socket.removeAllListeners();
-    socketHandlersAttached = false;
+  function handlePreviewError(payload = {}) {
+    if (payload.channel && payload.channel !== currentChannel()) return;
+    setPreviewPending(null);
+    showError(payload.error || 'Preview error.');
+    renderConnectionState();
   }
 
-  function attachSocketHandlers(nextSocket) {
-    detachSocketHandlers();
-    socket = nextSocket;
-    socketHandlersAttached = true;
+  function handlePreviewReady(payload = {}) {
+    if (payload.channel && payload.channel !== currentChannel()) return;
+    if (!shouldAcceptPreview(payload)) return;
+    applyPreviewResult(payload);
+    setConnectionState({ channel: payload.channel, meta: payload.meta });
+    renderConnectionState();
+  }
 
-    socket.on('connect', async () => {
-      state.reconnectAttempts = 0;
-      setConnectionState({ socketConnected: true, isBrowser: true });
-      renderConnectionState();
-      await onReconnect();
-    });
+  function handleGlyphsUpdated(payload = {}) {
+    setConnectionState({ channel: payload.channel, meta: payload.meta });
+    renderConnectionState();
+  }
 
-    socket.on('disconnect', () => {
-      setConnectionState({ socketConnected: false });
-      renderConnectionState();
-      scheduleReconnect();
-    });
+  function handleGlyphsCurrent(payload = {}) {
+    setConnectionState({ channel: payload.channel });
+    renderConnectionState();
+  }
 
-    socket.on('channel-joined', (payload = {}) => {
-      joinedChannel = payload.channel || joinedChannel;
-      pendingSocketJoin = null;
-      setConnectionState({ channel: payload.channel, meta: payload.meta, socketConnected: true });
-      renderConnectionState();
-      replayLatestPreviewIfAny(payload.latestPreview);
-    });
-
-    socket.on('channel-roster', (payload = {}) => {
-    });
-
-    socket.on('preview-ready', (payload = {}) => {
-      if (payload.channel && payload.channel !== currentChannel()) return;
-      if (!shouldAcceptPreview(payload)) return;
-      joinedChannel = payload.channel || joinedChannel;
-      pendingSocketJoin = null;
-      applyPreviewResult(payload);
-      setConnectionState({ channel: payload.channel, socketConnected: true });
-      renderConnectionState();
-    });
-
-    socket.on('browser-preview-ready', (payload = {}) => {
-      if (payload.channel && payload.channel !== currentChannel()) return;
-      if (!state.socketConnected) return;
-      if (!state.isBrowser) return;
-      if (!shouldAcceptPreview(payload)) return;
-      joinedChannel = payload.channel || joinedChannel;
-      pendingSocketJoin = null;
-      applyPreviewResult(payload);
-      setConnectionState({ channel: payload.channel, socketConnected: true });
-      renderConnectionState();
-    });
-
-    socket.on('preview-error', (payload = {}) => {
-      if (payload.channel && payload.channel !== currentChannel()) return;
-      setPreviewPending(null);
-      showError(payload.error || 'Preview error.');
-      renderConnectionState();
-    });
-
-    socket.on('glyphs-updated', (payload = {}) => {
-      joinedChannel = payload.channel || joinedChannel;
-      pendingSocketJoin = null;
-      setConnectionState({ channel: payload.channel, meta: payload.meta, socketConnected: true });
-      renderConnectionState();
-    });
-
-    socket.on('glyphs-current', (payload = {}) => {
-      joinedChannel = payload.channel || joinedChannel;
-      pendingSocketJoin = null;
-      setConnectionState({ channel: payload.channel, socketConnected: true });
-      renderConnectionState();
-    });
-
-    socket.on('channel-error', (payload = {}) => {
-      showError(payload.error || 'Channel error.');
-      pendingSocketJoin = null;
-      setPreviewPending(null);
-      setConnectionState({ socketConnected: false });
-      renderConnectionState();
-    });
+  function handleBrowserPreviewReady(payload = {}) {
+    if (payload.channel && payload.channel !== currentChannel()) return;
+    if (!shouldAcceptPreview(payload)) return;
+    applyPreviewResult(payload);
+    setConnectionState({ channel: payload.channel, meta: payload.meta });
+    renderConnectionState();
   }
 
   function goToStart() {
@@ -481,20 +375,10 @@
   }
 
   function goToWorkspace(fontName, existingGlyphs) {
-    joinedChannel = currentChannel();
-    pendingSocketJoin = null;
     channelStateCache = null;
     lastChannelSyncAt = 0;
     lastPreviewRequestAt = 0;
     lastSyncRequestAt = 0;
-
-    if (socket && joinedChannel) {
-      safeJoinChannel(joinedChannel);
-    }
-
-    if (socket && socket.connected) {
-      ensureChannelConnected().catch(() => {});
-    }
 
     renderConnectionState();
 
@@ -981,46 +865,25 @@
     statusText.textContent = 'Parsing .woff file...';
 
     try {
-      const response = await fetch('/api/socket/parse-woff-preview', {
+      const formData = new FormData();
+      formData.append('woffFile', file);
+
+      const response = await fetch('/api/parse-woff', {
         method: 'POST',
-        body: (() => {
-          const formData = new FormData();
-          formData.append('woffFile', file);
-          formData.append('channel', currentChannel() || 'preview');
-          formData.append('jobId', `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
-          setPreviewPending({ jobId: formData.get('jobId'), createdAt: Date.now() });
-          return formData;
-        })(),
+        body: formData,
       });
       const json = await response.json();
-      if (!response.ok) throw new Error(json.error || 'Failed to parse .woff preview.');
-      const parsed = json.content ? JSON.parse(json.content[0].text) : json;
+      if (!response.ok) throw new Error(json.error || 'Failed to parse .woff file.');
 
       state.existingWoffFile = file;
       updateFontNameFromFile(file);
-      if (parsed.meta?.channel) {
-        state.activeChannel = parsed.meta.channel;
-      }
-      if (!parsed.meta?.channel && !state.activeChannel) {
-        state.activeChannel = 'preview';
-      }
-      setConnectionState({ socketConnected: true, channel: parsed.meta?.channel || state.activeChannel, meta: parsed.meta });
-      renderConnectionState();
-      if (parsed.meta?.channel) {
-        await refreshChannelState().catch(() => {});
-      }
-      if (parsed.meta) channelStateCache = parsed.meta;
-      if (socket && parsed.meta?.channel) {
-        safeJoinChannel(parsed.meta.channel);
-      }
-
-      const glyphsWithUPE = (parsed.glyphs || []).map(g => ({
-        ...g,
-        unitsPerEm: parsed.unitsPerEm || 1000,
-      }));
-
+      state.activeChannel = null;
+      setConnectionState({ channel: null, meta: null });
       hide(statusBar);
-      goToWorkspace(state.fontName, glyphsWithUPE);
+      goToWorkspace(json.fontFamily || state.fontName, (json.glyphs || []).map((g) => ({
+        ...g,
+        unitsPerEm: json.unitsPerEm || 1000,
+      })));
     } catch (err) {
       hide(statusBar);
       showError(err.message);
@@ -1062,35 +925,8 @@
     }
   }
 
-  async function syncCurrentChannel(action, icons) {
-    const channel = currentChannel();
-    if (!channel) return null;
-    const res = await fetch(`/api/channel/${encodeURIComponent(channel)}/icons`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action,
-        icons,
-        fontName: state.fontName,
-        cssPrefix: state.cssPrefix,
-      }),
-    });
-    const payload = await res.json();
-    channelStateCache = payload;
-    if (payload && payload.glyphs) {
-      state.glyphs = payload.glyphs.map((g, index) => ({
-        id: nextId(),
-        name: g.name || `glyph_${index}`,
-        codepoint: g.codepoint || null,
-        svgContent: g.svgContent || null,
-        originalSvgContent: g.svgContent || null,
-        svgPathData: g.svgPathData || null,
-        isNew: false,
-        file: null,
-      }));
-      renderGlyphList();
-    }
-    return payload;
+  async function syncCurrentChannel() {
+    return null;
   }
 
   async function handleSvgFiles(files) {
@@ -1341,9 +1177,6 @@
 
   applyTheme();
   renderConnectionState();
-  if (window.io) {
-    attachSocketHandlers(window.io(window.location.origin, { autoConnect: true, reconnection: true, auth: { isBrowser: true } }));
-  }
   if (currentChannel()) {
     fetchChannelStatus(currentChannel()).catch(() => {});
   }
