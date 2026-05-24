@@ -464,7 +464,7 @@ app.post('/api/generate-css', express.json(), (req, res) => {
  */
 app.post('/api/sync-file-font', express.json({ limit: '25mb' }), (req, res) => {
   try {
-    const { targetPath, blob } = readJsonBody(req);
+    const { targetPath, blob, cssPath, fontFamily, prefix, glyphs } = readJsonBody(req);
     const resolvedPath = expandHome(targetPath);
     if (!resolvedPath) {
       return res.status(400).json({ error: 'targetPath is required.' });
@@ -480,7 +480,37 @@ app.post('/api/sync-file-font', express.json({ limit: '25mb' }), (req, res) => {
 
     const buffer = Buffer.from(blob, 'base64');
     fs.writeFileSync(resolvedPath, buffer);
-    return res.json({ success: true, targetPath: resolvedPath, size: buffer.length });
+
+    let syncedCssPath = null;
+    if (cssPath) {
+      const resolvedCssPath = expandHome(cssPath);
+      const cssParentDir = path.dirname(resolvedCssPath);
+      if (!fs.existsSync(cssParentDir)) {
+        return res.status(404).json({ error: `Target CSS folder not found: ${cssParentDir}` });
+      }
+
+      // Calculate relative path from CSS file directory to WOFF file path
+      let relativeFontPath = path.relative(cssParentDir, resolvedPath);
+      // Normalize slashes for CSS URL
+      relativeFontPath = relativeFontPath.replace(/\\/g, '/');
+
+      const cssText = buildCssText({
+        fontFamily: fontFamily || 'CustomFont',
+        prefix: prefix || 'icon',
+        fontPath: relativeFontPath,
+        glyphs: glyphs || [],
+      });
+
+      fs.writeFileSync(resolvedCssPath, cssText, 'utf-8');
+      syncedCssPath = resolvedCssPath;
+    }
+
+    return res.json({
+      success: true,
+      targetPath: resolvedPath,
+      size: buffer.length,
+      syncedCssPath: syncedCssPath
+    });
   } catch (err) {
     console.error('sync-file-font error:', err);
     return res.status(500).json({ error: `Sync failed: ${err.message}` });

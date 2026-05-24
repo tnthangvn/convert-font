@@ -20,6 +20,7 @@
     exportPayload: null,
     woffPreviewPayload: null,
     theme: localStorage.getItem('woff_theme') || 'system',
+    syncCssPath: '~/Desktop/icon.css',
   };
 
   function nextId() { return ++_idCounter; }
@@ -39,6 +40,7 @@
   const btnSyncFileFont = $('#btnSyncFileFont');
   const btnExportCss = $('#btnExportCss');
   const syncPathInput = $('#syncPathInput');
+  const syncCssPathInput = $('#syncCssPathInput');
   const syncPathField = syncPathInput?.closest('.sync-bar');
   const statusBar = $('#statusBar');
   const statusText = $('#statusText');
@@ -204,6 +206,54 @@
     return trimmed;
   }
 
+  function toSlug(str) {
+    return String(str || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '-')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  function getSiblingCssPath(syncPath) {
+    if (!syncPath) return '';
+    const lastSlash = Math.max(syncPath.lastIndexOf('/'), syncPath.lastIndexOf('\\'));
+    if (lastSlash !== -1) {
+      return syncPath.substring(0, lastSlash + 1) + 'icon.css';
+    }
+    return 'icon.css';
+  }
+
+  function handleImportedWoffSyncDefaults(file) {
+    if (!file) return;
+    const slug = toSlug(file.name);
+    const pathKey = `sync-path-${slug}`;
+    const iconKey = `sync-path-${slug}-icon`;
+    const cssKey = `sync-path-${slug}-css`;
+
+    // 1. Sync Path
+    // Prioritize the actual file path when available, otherwise fall back to localStorage
+    let syncPath = file.path || localStorage.getItem(pathKey) || `~/Desktop/${file.name}`;
+    localStorage.setItem(pathKey, syncPath);
+    state.syncPath = syncPath;
+
+    // 2. Font Name
+    let fontName = localStorage.getItem(iconKey);
+    if (!fontName) {
+      fontName = deriveFontNameFromFile(file);
+      localStorage.setItem(iconKey, fontName);
+    }
+    state.fontName = fontName;
+
+    // 3. Sync CSS Path
+    let syncCssPath = localStorage.getItem(cssKey);
+    if (!syncCssPath || file.path) {
+      syncCssPath = getSiblingCssPath(syncPath);
+      localStorage.setItem(cssKey, syncCssPath);
+    }
+    state.syncCssPath = syncCssPath;
+  }
+
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   }
@@ -362,9 +412,11 @@
     state.generatedBlob = null;
     state.fontName = 'CustomFont';
     state.syncPath = '~/Desktop/RV-Icon.woff';
+    state.syncCssPath = '~/Desktop/icon.css';
     state.cssPreviewText = null;
     if (fontNameInput) fontNameInput.value = 'CustomFont';
     if (syncPathInput) syncPathInput.value = state.syncPath;
+    if (syncCssPathInput) syncCssPathInput.value = '';
     if (btnSyncFileFont) btnSyncFileFont.disabled = false;
 
     show(startSection);
@@ -401,10 +453,16 @@
       })).filter(g => g.svgContent || g.svgPathData);
     }
 
+    if (!state.existingWoffFile) {
+      state.syncPath = '~/Desktop/RV-Icon.woff';
+      state.syncCssPath = '~/Desktop/icon.css';
+    }
     fontNameInput.value = state.fontName;
     fontNameDisplay.textContent = state.fontName;
     codepointStartInput.value = state.codepointStart.toString(16).toUpperCase();
     cssPrefixInput.value = state.cssPrefix;
+    if (syncPathInput) syncPathInput.value = state.syncPath;
+    if (syncCssPathInput) syncCssPathInput.value = state.syncCssPath || '';
     state.searchQuery = '';
     if (searchInput) searchInput.value = '';
 
@@ -876,11 +934,11 @@
       if (!response.ok) throw new Error(json.error || 'Failed to parse .woff file.');
 
       state.existingWoffFile = file;
-      updateFontNameFromFile(file);
+      handleImportedWoffSyncDefaults(file);
       state.activeChannel = null;
       setConnectionState({ channel: null, meta: null });
       hide(statusBar);
-      goToWorkspace(json.fontFamily || state.fontName, (json.glyphs || []).map((g) => ({
+      goToWorkspace(state.fontName, (json.glyphs || []).map((g) => ({
         ...g,
         unitsPerEm: json.unitsPerEm || 1000,
       })));
@@ -905,19 +963,38 @@
     }
     if (!state.generatedBlob) return;
 
+    const syncCssPath = syncCssPathInput?.value.trim() || '';
+    state.syncCssPath = syncCssPath;
+
+    const body = {
+      targetPath: syncPath,
+      blob: await blobToBase64(state.generatedBlob),
+    };
+
+    if (syncCssPath) {
+      body.cssPath = syncCssPath;
+      body.fontFamily = fontNameInput.value.trim() || state.fontName;
+      body.prefix = cssPrefixInput.value.trim() || 'icon';
+      body.glyphs = state.glyphs.map(g => ({
+        name: g.name,
+        codepoint: g.codepoint,
+      }));
+    }
+
     setBusy(btnSyncFileFont, true, 'Syncing...');
     try {
       const res = await fetch('/api/sync-file-font', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetPath: syncPath,
-          blob: await blobToBase64(state.generatedBlob),
-        }),
+        body: JSON.stringify(body),
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error || 'Sync failed.');
-      toast(`Synced ${payload.targetPath}`);
+      if (payload.syncedCssPath) {
+        toast(`Synced font & CSS`);
+      } else {
+        toast(`Synced ${payload.targetPath}`);
+      }
     } catch (err) {
       showError(err.message);
     } finally {
@@ -1253,6 +1330,10 @@
   fontNameInput.addEventListener('input', () => {
     fontNameDisplay.textContent = fontNameInput.value || 'CustomFont';
     state.fontName = fontNameInput.value || 'CustomFont';
+    if (state.existingWoffFile) {
+      const slug = toSlug(state.existingWoffFile.name);
+      localStorage.setItem(`sync-path-${slug}-icon`, state.fontName);
+    }
     invalidateCssPreview();
   });
 
@@ -1305,9 +1386,28 @@
   if (btnNormalizeAll) btnNormalizeAll.addEventListener('click', normalizeAll);
   if (btnSyncFileFont) btnSyncFileFont.addEventListener('click', handleSyncFileFont);
   if (syncPathInput) {
-    syncPathInput.addEventListener('change', normalizeSyncPathInput);
+    syncPathInput.addEventListener('change', () => {
+      normalizeSyncPathInput();
+      if (state.existingWoffFile) {
+        const slug = toSlug(state.existingWoffFile.name);
+        localStorage.setItem(`sync-path-${slug}`, syncPathInput.value);
+      }
+    });
     syncPathInput.addEventListener('input', () => {
       state.syncPath = syncPathInput.value;
+      if (state.existingWoffFile) {
+        const slug = toSlug(state.existingWoffFile.name);
+        localStorage.setItem(`sync-path-${slug}`, state.syncPath);
+      }
+    });
+  }
+  if (syncCssPathInput) {
+    syncCssPathInput.addEventListener('input', () => {
+      state.syncCssPath = syncCssPathInput.value;
+      if (state.existingWoffFile) {
+        const slug = toSlug(state.existingWoffFile.name);
+        localStorage.setItem(`sync-path-${slug}-css`, state.syncCssPath);
+      }
     });
   }
 
