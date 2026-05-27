@@ -261,7 +261,10 @@
   function setSyncStatus(message, isError = false) {
     state.syncStatus = { message, isError };
     if (statusText) statusText.textContent = message;
-    if (statusBar) show(statusBar);
+    if (statusBar) {
+      statusBar.classList.toggle('status-bar--done', !isError);
+      show(statusBar);
+    }
     if (errorBar) {
       if (isError) showError(message);
       else hideError();
@@ -317,7 +320,10 @@
 
   function toast(message, isError = false) {
     if (statusText) statusText.textContent = message;
-    if (statusBar) show(statusBar);
+    if (statusBar) {
+      statusBar.classList.toggle('status-bar--done', !isError);
+      show(statusBar);
+    }
     if (isError) showError(message);
     else hideError();
   }
@@ -460,7 +466,7 @@
     fontNameInput.value = state.fontName;
     fontNameDisplay.textContent = state.fontName;
     codepointStartInput.value = state.codepointStart.toString(16).toUpperCase();
-    cssPrefixInput.value = state.cssPrefix;
+    if (cssPrefixInput) cssPrefixInput.value = state.cssPrefix;
     if (syncPathInput) syncPathInput.value = state.syncPath;
     if (syncCssPathInput) syncCssPathInput.value = state.syncCssPath || '';
     state.searchQuery = '';
@@ -607,7 +613,7 @@
   }
 
   function createGlyphCard(glyph, index) {
-    const prefix = cssPrefixInput.value.trim() || 'icon';
+    const prefix = cssPrefixInput?.value.trim() || state.cssPrefix || 'icon';
 
     const card = document.createElement('div');
     card.className = 'glyph-card' + (glyph.isNew ? '' : ' glyph-card--existing');
@@ -693,7 +699,7 @@
     // CSS selector preview
     const cssSelectorEl = document.createElement('div');
     cssSelectorEl.className = 'glyph-card__css-selector';
-    cssSelectorEl.textContent = `.${prefix}-${glyph.name}`;
+    cssSelectorEl.textContent = `.${prefix}-${glyph.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
     // Normalize button (per-glyph)
     const normBtn = document.createElement('button');
@@ -919,6 +925,7 @@
     }
 
     hideError();
+    if (statusBar) statusBar.classList.remove('status-bar--done');
     show(statusBar);
     statusText.textContent = 'Parsing .woff file...';
 
@@ -974,13 +981,14 @@
     if (syncCssPath) {
       body.cssPath = syncCssPath;
       body.fontFamily = fontNameInput.value.trim() || state.fontName;
-      body.prefix = cssPrefixInput.value.trim() || 'icon';
+      body.prefix = cssPrefixInput?.value.trim() || state.cssPrefix || 'icon';
       body.glyphs = state.glyphs.map(g => ({
         name: g.name,
         codepoint: g.codepoint,
       }));
     }
 
+    if (statusBar) statusBar.classList.remove('status-bar--done');
     setBusy(btnSyncFileFont, true, 'Syncing...');
     try {
       const res = await fetch('/api/sync-file-font', {
@@ -991,9 +999,9 @@
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error || 'Sync failed.');
       if (payload.syncedCssPath) {
-        toast(`Synced font & CSS`);
+        setSyncStatus('Synced font & CSS');
       } else {
-        toast(`Synced ${payload.targetPath}`);
+        setSyncStatus(`Synced ${payload.targetPath}`);
       }
     } catch (err) {
       showError(err.message);
@@ -1053,6 +1061,7 @@
   async function handleGenerate() {
     hideError();
     hide(downloadSection);
+    if (statusBar) statusBar.classList.remove('status-bar--done');
     show(statusBar);
     statusText.textContent = 'Generating .woff file...';
     btnGenerate.disabled = true;
@@ -1076,7 +1085,10 @@
       }));
 
       const formData = new FormData();
+      const prefix = cssPrefixInput?.value.trim() || state.cssPrefix || 'icon';
+      state.cssPrefix = prefix;
       formData.append('fontName', fontNameInput.value || state.fontName);
+      formData.append('cssPrefix', prefix);
       formData.append('glyphMeta', JSON.stringify(glyphMeta));
 
       const res = await fetch('/api/generate', { method: 'POST', body: formData });
@@ -1127,7 +1139,7 @@
 
   /** Fetch generated CSS text from the server. */
   async function fetchGeneratedCss() {
-    const prefix = cssPrefixInput.value.trim() || 'icon';
+    const prefix = cssPrefixInput?.value.trim() || state.cssPrefix || 'icon';
     const fontFamily = fontNameInput.value.trim() || state.fontName;
     const fontPath = `fonts/${fontFamily}.woff`;
 
@@ -1353,6 +1365,14 @@
       state.cssPrefix = cssPrefixInput.value.trim() || 'icon';
       sessionStorage.setItem('woff_cssPrefix', state.cssPrefix);
       invalidateCssPreview();
+      document.querySelectorAll('.glyph-card').forEach((card) => {
+        const index = Number(card.dataset.index);
+        const glyph = state.glyphs[index];
+        const selector = card.querySelector('.glyph-card__css-selector');
+        if (glyph && selector) {
+          selector.textContent = `.${state.cssPrefix}-${glyph.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+        }
+      });
     });
   }
 

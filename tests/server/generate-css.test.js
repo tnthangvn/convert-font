@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildCssText, formatCssEscape } = require('../../lib/build-css');
+const { buildCssText, formatCssEscape, mergeCssText } = require('../../lib/build-css');
 
 describe('buildCssText', () => {
   const baseOpts = {
@@ -51,6 +51,81 @@ describe('buildCssText', () => {
       glyphs: [{ name: 'bad name!@#', codepoint: 0xE001 }],
     });
     assert.match(css, /\.icon-bad-name---:before/);
+  });
+});
+
+describe('mergeCssText', () => {
+  it('preserves font face path and updates hash', () => {
+    const css = mergeCssText({
+      existingCss: `@font-face {
+  font-family: 'Old';
+  src: url('~~/public/fonts/RV-Icon.woff?mnj1teui') format('woff');
+}
+`,
+      fontFamily: 'RVIcon',
+      prefix: 'rvi',
+      fontPath: 'fonts/fallback.woff',
+      glyphs: [],
+      hash: 'newhash',
+    });
+
+    assert.match(css, /url\('~~\/public\/fonts\/RV-Icon\.woff\?newhash'\)/);
+    assert.doesNotMatch(css, /mnj1teui/);
+    assert.doesNotMatch(css, /fonts\/fallback\.woff/);
+  });
+
+  it('appends generated rules in glyph order', () => {
+    const css = mergeCssText({
+      existingCss: `.rvi-b:before {
+  content: '\\e002';
+}
+
+.rvi-a:before {
+  content: '\\e001';
+}
+`,
+      fontFamily: 'RVIcon',
+      prefix: 'rvi',
+      glyphs: [
+        { name: 'a', codepoint: 0xe010 },
+        { name: 'b', codepoint: 0xe011 },
+      ],
+      hash: 'hash',
+    });
+
+    assert.ok(css.indexOf('.rvi-a:before') < css.indexOf('.rvi-b:before'));
+    assert.match(css, /.rvi-a:before\s*{\s*content: '\\e010';\s*}/);
+    assert.match(css, /.rvi-b:before\s*{\s*content: '\\e011';\s*}/);
+  });
+
+  it('keeps custom icon rules while moving generated rules to the bottom group', () => {
+    const css = mergeCssText({
+      existingCss: `.rvi-activity-2:before {
+  content: '\\e002';
+}
+
+.rvi-wrestling-2:before {
+  content: '🤼‍♀️';
+}
+
+.rvi-activity-1:before {
+  content: '\\e001';
+}
+`,
+      fontFamily: 'RVIcon',
+      prefix: 'rvi',
+      glyphs: [
+        { name: 'activity-1', codepoint: 0xe010 },
+        { name: 'activity-2', codepoint: 0xe011 },
+      ],
+      hash: 'hash',
+    });
+
+    assert.ok(css.indexOf('.rvi-wrestling-2:before') < css.indexOf('.rvi-activity-1:before'));
+    assert.ok(css.indexOf('.rvi-activity-1:before') < css.indexOf('.rvi-activity-2:before'));
+    assert.match(css, /.rvi-wrestling-2:before\s*{\s*content: '🤼‍♀️';\s*}/);
+    assert.match(css, /.rvi-activity-1:before\s*{\s*content: '\\e010';\s*}/);
+    assert.match(css, /.rvi-activity-2:before\s*{\s*content: '\\e011';\s*}/);
   });
 });
 

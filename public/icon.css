@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'RV-Icon';
-  src: url('~~/public/fonts/RV-Icon.woff?mnj1teui') format('woff');
+  src: url('~~/public/fonts/RV-Icon.woff?mpp7inf0') format('woff');
   font-weight: normal;
   font-style: normal;
   font-display: block;
@@ -17,8 +17,8 @@
   line-height: 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  display: inline-block;
 }
+
 .rvi-football:before,
 .rvi-bong-da-3:before,
 .rvi-bong-da-5:before,
@@ -100,6 +100,7 @@
 .rvi-esport-5v5:before {
   content: '🎮';
 }
+
 
 .rvi-activity:before {
   content: '\e001';
@@ -585,10 +586,6 @@
   content: '\e079';
 }
 
-.rvi-warning:before {
-  content: '\e07a';
-}
-
 .rvi-zap:before {
-  content: '\e07b';
+  content: '\e07a';
 }

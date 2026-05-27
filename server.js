@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const { Readable } = require('stream');
 const opentype = require('opentype.js');
-const { buildCssText } = require('./lib/build-css');
+const { buildCssText, mergeCssText } = require('./lib/build-css');
 const { normalizeSvg } = require('./lib/normalize-svg');
 
 function expandHome(p) {
@@ -494,12 +494,15 @@ app.post('/api/sync-file-font', express.json({ limit: '25mb' }), (req, res) => {
       // Normalize slashes for CSS URL
       relativeFontPath = relativeFontPath.replace(/\\/g, '/');
 
-      const cssText = buildCssText({
+      const cssOptions = {
         fontFamily: fontFamily || 'CustomFont',
         prefix: prefix || 'icon',
         fontPath: relativeFontPath,
         glyphs: glyphs || [],
-      });
+      };
+      const cssText = fs.existsSync(resolvedCssPath)
+        ? mergeCssText({ existingCss: fs.readFileSync(resolvedCssPath, 'utf-8'), ...cssOptions })
+        : buildCssText(cssOptions);
 
       fs.writeFileSync(resolvedCssPath, cssText, 'utf-8');
       syncedCssPath = resolvedCssPath;

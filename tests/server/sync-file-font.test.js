@@ -106,6 +106,106 @@ describe('POST /api/sync-file-font', () => {
     assert.match(cssContent, /content: '\\e001'/);
   });
 
+  it('merges generated css while preserving custom emoji icons', async () => {
+    const testFontPath = path.join(tempDir, 'merge', 'font.woff');
+    const testCssPath = path.join(tempDir, 'merge.css');
+    const fakeBase64 = Buffer.from('Merged Font Data').toString('base64');
+
+    fs.mkdirSync(path.dirname(testFontPath), { recursive: true });
+    fs.writeFileSync(testCssPath, `@font-face {
+  font-family: 'OldFont';
+  src: url('old.woff?old') format('woff');
+}
+
+[class^='rvi-'],
+[class*=' rvi-'] {
+  font-family: 'OldFont' !important;
+}
+
+/* custom stays with don't and } inside comment */
+.rvi-tennis:before {
+  content: '🎾';
+}
+
+.rvi-arrow-up::before {
+  content: '\\e00b';
+}
+
+.rvi-old-icon:before {
+  content: '\\e00c';
+}
+
+.custom-rule {
+  color: red;
+}
+`, 'utf-8');
+
+    const res = await fetch(`${baseUrl}/api/sync-file-font`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetPath: testFontPath,
+        blob: fakeBase64,
+        cssPath: testCssPath,
+        fontFamily: 'RVIcon',
+        prefix: 'rvi',
+        glyphs: [
+          { name: 'arrow-up', codepoint: 0xe010 },
+          { name: 'arrow-down', codepoint: 0xe011 },
+        ],
+      }),
+    });
+
+    assert.equal(res.status, 200);
+    const cssContent = fs.readFileSync(testCssPath, 'utf8');
+    assert.match(cssContent, /font-family:\s*'RVIcon'/);
+    assert.match(cssContent, /url\('old\.woff\?/);
+    assert.match(cssContent, /\.rvi-tennis:before\s*{\s*content: '🎾';\s*}/);
+    assert.match(cssContent, /\.rvi-arrow-up::before\s*{\s*content: '\\e010';\s*}/);
+    assert.doesNotMatch(cssContent, /\.rvi-old-icon:before/);
+    assert.match(cssContent, /\.custom-rule\s*{\s*color: red;\s*}/);
+    assert.match(cssContent, /\.rvi-arrow-down:before\s*{\s*content: '\\e011';\s*}/);
+    assert.equal((cssContent.match(/\.rvi-arrow-up::before/g) || []).length, 1);
+    assert.equal((cssContent.match(/\.rvi-arrow-up:before/g) || []).length, 0);
+  });
+
+  it('preserves absolute alias font path and only updates query during css sync', async () => {
+    const testFontPath = path.join(tempDir, 'public', 'fonts', 'RV-Icon.woff');
+    const testCssPath = path.join(tempDir, 'public', 'icon.css');
+    const fakeBase64 = Buffer.from('RV Icon Font Data').toString('base64');
+
+    fs.mkdirSync(path.dirname(testFontPath), { recursive: true });
+    fs.writeFileSync(testCssPath, `@font-face {
+  font-family: 'RV-Icon';
+  src: url('~~/public/fonts/RV-Icon.woff?mnj1teui') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+`, 'utf-8');
+
+    const res = await fetch(`${baseUrl}/api/sync-file-font`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetPath: testFontPath,
+        blob: fakeBase64,
+        cssPath: testCssPath,
+        fontFamily: 'RV-Icon',
+        prefix: 'rvi',
+        glyphs: [
+          { name: 'activity', codepoint: 0xe001 },
+        ],
+      }),
+    });
+
+    assert.equal(res.status, 200);
+    const cssContent = fs.readFileSync(testCssPath, 'utf8');
+    assert.match(cssContent, /src: url\('~~\/public\/fonts\/RV-Icon\.woff\?[^']+'\) format\('woff'\);/);
+    assert.doesNotMatch(cssContent, /src: url\('fonts\/RV-Icon\.woff\?/);
+    assert.doesNotMatch(cssContent, /mnj1teui/);
+  });
+
   it('returns 404 if target folder does not exist', async () => {
     const invalidPath = path.join(tempDir, 'nonexistent_folder_abc_123', 'font.woff');
     const fakeBase64 = Buffer.from('Data').toString('base64');
