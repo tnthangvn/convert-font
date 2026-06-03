@@ -18,7 +18,6 @@
     cssPreviewText: null,
     cssPreviewPayload: null,
     exportPayload: null,
-    woffPreviewPayload: null,
     theme: localStorage.getItem('woff_theme') || 'system',
     syncCssPath: '~/Desktop/icon.css',
   };
@@ -85,74 +84,49 @@
     show(errorBar);
   }
 
-  function setConnectionState({ channel, meta }) {
-    if (channel) state.activeChannel = channel;
-    if (meta !== undefined) state.channelMeta = meta;
+  // ── Live preview (SSE) ─────────────────────────────────────
+  // The server pushes a chosen repo font here; the tab swaps to it live,
+  // preserving the user's current search query and scroll position.
+  function updateLiveIndicator(status) {
+    const dot = $('#liveIndicator');
+    const label = $('#liveStatusText');
+    if (dot) dot.className = 'live-indicator live-indicator--' + status;
+    if (label) label.textContent = status === 'connected' ? 'Live' : 'Reconnecting…';
   }
 
-  function currentChannel() {
-    return state.activeChannel || state.channelId || null;
-  }
+  function handleIncomingPreview(result) {
+    if (!result || !Array.isArray(result.glyphs)) return;
+    const scrollY = window.scrollY;
+    const query = searchInput ? searchInput.value : '';
 
-  function renderConnectionState() {
-    const channel = currentChannel() || 'none';
-    if (statusText) statusText.textContent = `channel ${channel}`;
-  }
-
-  function refreshChannelState() {
-    const channel = currentChannel();
-    if (!channel) return Promise.resolve(null);
-    return fetchChannelStatus(channel);
-  }
-
-  function setPreviewPending(job) {
-    pendingPreviewJob = job || null;
-    state.previewPending = Boolean(job);
-  }
-
-  function shouldAcceptPreview(payload = {}) {
-    if (!payload.jobId) return true;
-    if (latestPreviewJob && payload.jobId < latestPreviewJob.jobId) return false;
-    return true;
-  }
-
-  function applyPreviewResult(payload = {}) {
-    if (!shouldAcceptPreview(payload)) return;
-    latestPreviewJob = { jobId: payload.jobId || null, createdAt: payload.createdAt || null };
-    setPreviewPending(null);
-    const result = payload.result || payload;
-    state.woffPreviewPayload = result;
     state.fontName = result.fontFamily || state.fontName;
-    fontNameInput.value = state.fontName;
-    fontNameDisplay.textContent = state.fontName;
-    if (result.fontFamily) state.fontName = result.fontFamily;
-    if (syncPathInput && !syncPathInput.value) syncPathInput.value = state.syncPath;
-    state.syncPath = syncPathInput?.value || state.syncPath;
-    if (syncPathInput) syncPathInput.value = state.syncPath;
-    if (fontNameInput) fontNameInput.value = state.fontName;
-    if (fontNameDisplay) fontNameDisplay.textContent = state.fontName;
+    state.existingWoffFile = null;
+    const glyphs = result.glyphs.map((g) => ({ ...g, unitsPerEm: result.unitsPerEm || 1000 }));
+    goToWorkspace(state.fontName, glyphs);
 
-    state.glyphs = (result.glyphs || []).map((g) => ({
-      id: nextId(),
-      name: g.name || `glyph_${g.index}`,
-      codepoint: g.unicode || null,
-      svgContent: g.svgPathData ? buildSvgFromPath(g.svgPathData, result.unitsPerEm || 1000) : null,
-      originalSvgContent: g.svgPathData ? buildSvgFromPath(g.svgPathData, result.unitsPerEm || 1000) : null,
-      svgPathData: g.svgPathData || null,
-      isNew: false,
-      file: null,
-      unitsPerEm: result.unitsPerEm || 1000,
-    })).filter((g) => g.svgContent || g.svgPathData);
-    renderGlyphList();
+    if (query && searchInput) {
+      searchInput.value = query;
+      renderGlyphList();
+    }
+    requestAnimationFrame(() => window.scrollTo({ top: scrollY }));
+    setSyncStatus(`Previewing ${state.fontName}`);
   }
 
-  async function fetchChannelStatus(channel) {
-    const res = await fetch(`/api/channel/${encodeURIComponent(channel)}/export`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to read channel status.');
-    setConnectionState({ channel, meta: data.meta });
-    renderConnectionState();
-    return data;
+  function connectPreviewStream() {
+    if (typeof EventSource === 'undefined') return;
+    const es = new EventSource('/api/preview-stream');
+    es.addEventListener('preview-ready', (e) => {
+      try { handleIncomingPreview(JSON.parse(e.data)); } catch (_) { /* ignore */ }
+    });
+    es.onopen = () => updateLiveIndicator('connected');
+    es.onerror = () => updateLiveIndicator('reconnecting'); // EventSource auto-retries
+  }
+
+  async function bootstrapActivePreview() {
+    try {
+      const res = await fetch('/api/active-preview');
+      if (res.ok) handleIncomingPreview(await res.json());
+    } catch (_) { /* no active preview yet */ }
   }
 
   function hideError() { hide(errorBar); }
@@ -346,71 +320,6 @@
   }
 
   // ── Navigation ─────────────────────────────────────────
-  let lastChannelSyncAt = 0;
-  let lastPreviewRequestAt = 0;
-  let lastSyncRequestAt = 0;
-  let channelStateCache = null;
-  let pendingPreviewJob = null;
-  let latestPreviewJob = null;
-
-  function replayLatestPreviewIfAny(payload) {
-    if (!payload || !payload.result) return;
-    applyPreviewResult(payload);
-  }
-
-  async function refreshChannelState() {
-    const channel = currentChannel();
-    if (!channel) return;
-    const status = await fetchChannelStatus(channel);
-    channelStateCache = status;
-    return status;
-  }
-
-  function syncPreviewStateFromResponse(payload = {}) {
-    setConnectionState({ channel: payload.channel, meta: payload.meta });
-    renderConnectionState();
-    replayLatestPreviewIfAny(payload.latestPreview);
-  }
-
-  function handleChannelError(payload = {}) {
-    showError(payload.error || 'Channel error.');
-    setPreviewPending(null);
-    renderConnectionState();
-  }
-
-  function handlePreviewError(payload = {}) {
-    if (payload.channel && payload.channel !== currentChannel()) return;
-    setPreviewPending(null);
-    showError(payload.error || 'Preview error.');
-    renderConnectionState();
-  }
-
-  function handlePreviewReady(payload = {}) {
-    if (payload.channel && payload.channel !== currentChannel()) return;
-    if (!shouldAcceptPreview(payload)) return;
-    applyPreviewResult(payload);
-    setConnectionState({ channel: payload.channel, meta: payload.meta });
-    renderConnectionState();
-  }
-
-  function handleGlyphsUpdated(payload = {}) {
-    setConnectionState({ channel: payload.channel, meta: payload.meta });
-    renderConnectionState();
-  }
-
-  function handleGlyphsCurrent(payload = {}) {
-    setConnectionState({ channel: payload.channel });
-    renderConnectionState();
-  }
-
-  function handleBrowserPreviewReady(payload = {}) {
-    if (payload.channel && payload.channel !== currentChannel()) return;
-    if (!shouldAcceptPreview(payload)) return;
-    applyPreviewResult(payload);
-    setConnectionState({ channel: payload.channel, meta: payload.meta });
-    renderConnectionState();
-  }
-
   function goToStart() {
     state.mode = 'start';
     state.existingWoffFile = null;
@@ -433,13 +342,6 @@
   }
 
   function goToWorkspace(fontName, existingGlyphs) {
-    channelStateCache = null;
-    lastChannelSyncAt = 0;
-    lastPreviewRequestAt = 0;
-    lastSyncRequestAt = 0;
-
-    renderConnectionState();
-
     state.mode = 'workspace';
     state.fontName = fontName || 'CustomFont';
     state.generatedBlob = null;
@@ -722,7 +624,6 @@
       reindexGlyphs();
       renderGlyphList();
       invalidateCssPreview();
-      void syncCurrentChannel('delete', [glyph]);
     });
 
     // Drag handle indicator
@@ -755,7 +656,6 @@
       nameEl.textContent = newName;
       if (newName !== currentName) {
         invalidateCssPreview();
-        void syncCurrentChannel('update', [glyph]);
       }
     }
 
@@ -942,8 +842,6 @@
 
       state.existingWoffFile = file;
       handleImportedWoffSyncDefaults(file);
-      state.activeChannel = null;
-      setConnectionState({ channel: null, meta: null });
       hide(statusBar);
       goToWorkspace(state.fontName, (json.glyphs || []).map((g) => ({
         ...g,
@@ -1010,10 +908,6 @@
     }
   }
 
-  async function syncCurrentChannel() {
-    return null;
-  }
-
   async function handleSvgFiles(files) {
     hideError();
     const errors = [];
@@ -1042,7 +936,6 @@
           file,
         };
         state.glyphs.push(glyph);
-        void syncCurrentChannel('add', [glyph]);
       } catch (err) {
         errors.push(`Failed to read "${file.name}": ${err.message}`);
       }
@@ -1265,10 +1158,8 @@
   // ── Event Listeners ────────────────────────────────────
 
   applyTheme();
-  renderConnectionState();
-  if (currentChannel()) {
-    fetchChannelStatus(currentChannel()).catch(() => {});
-  }
+  connectPreviewStream();
+  bootstrapActivePreview();
   if (themeToggle) themeToggle.addEventListener('click', cycleTheme);
   if (systemThemeQuery.addEventListener) {
     systemThemeQuery.addEventListener('change', applyTheme);

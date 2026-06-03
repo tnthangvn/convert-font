@@ -4,10 +4,11 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { Readable } = require('stream');
-const opentype = require('opentype.js');
 const { buildCssText, mergeCssText } = require('./lib/build-css');
 const { normalizeSvg } = require('./lib/normalize-svg');
+const { parseWoff } = require('./lib/parse-woff');
+const { generateWoff } = require('./lib/generate-woff');
+const { discoverFonts } = require('./lib/repo-fonts');
 
 function expandHome(p) {
   if (typeof p !== 'string') return '';
@@ -27,12 +28,24 @@ const PORT = process.env.PORT || 3456;
 
 const MAX_UPLOAD_SIZE = 20 * 1024 * 1024;
 const server = http.createServer(app);
-const io = null;
-const channelState = new Map();
 const LATEST_DIR = path.join(__dirname, 'data', 'latest');
+
+// ── Live preview (SSE) ───────────────────────────────────────
+// The browser subscribes to /api/preview-stream; an agent/MCP triggers a
+// preview via POST /api/preview-font, which broadcasts to every open tab.
+let sseClients = [];
+let activePreview = null;
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function broadcastPreview(result) {
+  activePreview = result;
+  const msg = `event: preview-ready\ndata: ${JSON.stringify(result)}\n\n`;
+  for (const client of sseClients) {
+    try { client.write(msg); } catch (_) { /* dropped on next close */ }
+  }
 }
 
 function persistLatestBundle(woffBuffer, glyphs, fontFamily, cssPrefix = 'icon') {
@@ -59,42 +72,6 @@ function persistLatestBundle(woffBuffer, glyphs, fontFamily, cssPrefix = 'icon')
   fs.writeFileSync(path.join(LATEST_DIR, 'metadata.json'), JSON.stringify(metadata, null, 2));
 }
 
-function parseWoff(buffer) {
-  const fontBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
-  const font = opentype.parse(fontBuffer, { lowMemory: false });
-  const ascender = font.ascender || font.unitsPerEm * 0.8;
-  const unitsPerEm = font.unitsPerEm || 1000;
-  const glyphs = [];
-
-  for (let i = 0; i < font.glyphs.length; i++) {
-    const g = font.glyphs.get(i);
-    if (!g.unicode && g.index !== 0) continue;
-
-    let svgPath = '';
-    try {
-      const commands = g.path?.commands || (typeof g.getPath === 'function' ? g.getPath(0, 0, unitsPerEm).commands : null);
-      svgPath = pathCommandsToData(commands, (value) => unitsPerEm - value);
-    } catch (_) { /* ignore */ }
-
-    glyphs.push({
-      index: g.index,
-      name: g.name || `glyph_${g.index}`,
-      unicode: g.unicode,
-      unicodeHex: g.unicode ? 'U+' + g.unicode.toString(16).toUpperCase().padStart(4, '0') : null,
-      svgPathData: svgPath,
-      advanceWidth: g.advanceWidth,
-    });
-  }
-  return {
-    fontFamily: font.names?.fontFamily?.en || font.names?.fontFamily || 'Unknown',
-    unitsPerEm,
-    ascender,
-    numGlyphs: font.glyphs.length,
-    glyphs,
-  };
-}
-
-
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -112,184 +89,6 @@ function sanitizeGlyphName(filename) {
     .replace(/[^a-zA-Z0-9_-]/g, '_')
     .replace(/^_+|_+$/g, '')
     || 'glyph';
-}
-
-function pathCommandsToData(commands, yTransform = null) {
-  if (!Array.isArray(commands) || commands.length === 0) return '';
-  const y = (value) => yTransform ? yTransform(value) : value;
-  return commands.map((cmd) => {
-    switch (cmd.type) {
-      case 'M': return `M ${cmd.x} ${y(cmd.y)}`;
-      case 'L': return `L ${cmd.x} ${y(cmd.y)}`;
-      case 'C': return `C ${cmd.x1} ${y(cmd.y1)} ${cmd.x2} ${y(cmd.y2)} ${cmd.x} ${y(cmd.y)}`;
-      case 'Q': return `Q ${cmd.x1} ${y(cmd.y1)} ${cmd.x} ${y(cmd.y)}`;
-      case 'A': return `A ${cmd.rX} ${cmd.rY} ${cmd.xRot} ${cmd.lArcFlag} ${cmd.sweepFlag ? 0 : 1} ${cmd.x} ${y(cmd.y)}`;
-      case 'Z': return 'Z';
-      default: return '';
-    }
-  }).filter(Boolean).join(' ');
-}
-
-/**
- * Parse an existing .woff file and return glyph metadata.
- */
-function parseWoff(buffer) {
-  const fontBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
-  const font = opentype.parse(fontBuffer, { lowMemory: false });
-  const ascender = font.ascender || font.unitsPerEm * 0.8;
-  const unitsPerEm = font.unitsPerEm || 1000;
-  const glyphs = [];
-
-  for (let i = 0; i < font.glyphs.length; i++) {
-    const g = font.glyphs.get(i);
-    if (!g.unicode && g.index !== 0) continue;
-
-    let svgPath = '';
-    try {
-      const commands = g.path?.commands || (typeof g.getPath === 'function' ? g.getPath(0, 0, unitsPerEm).commands : null);
-      svgPath = pathCommandsToData(commands, (value) => unitsPerEm - value);
-    } catch (_) { /* ignore */ }
-
-    glyphs.push({
-      index: g.index,
-      name: g.name || `glyph_${g.index}`,
-      unicode: g.unicode,
-      unicodeHex: g.unicode ? 'U+' + g.unicode.toString(16).toUpperCase().padStart(4, '0') : null,
-      svgPathData: svgPath,
-      advanceWidth: g.advanceWidth,
-    });
-  }
-  return {
-    fontFamily: font.names?.fontFamily?.en || font.names?.fontFamily || 'Unknown',
-    unitsPerEm,
-    ascender,
-    numGlyphs: font.glyphs.length,
-    glyphs,
-  };
-}
-
-/**
- * Generate .woff buffer from SVG content strings + optional existing glyphs.
- * Pipeline: svgicons2svgfont → svg2ttf → ttf2woff
- */
-async function generateWoff(svgItems, fontName = 'CustomFont', existingWoffBuffer = null, glyphMeta = null) {
-  // Dynamic imports for ESM-only packages
-  const { SVGIcons2SVGFontStream } = await import('svgicons2svgfont');
-  const svg2ttf = (await import('svg2ttf')).default;
-  const ttf2woff = (await import('ttf2woff')).default;
-
-  // Determine starting codepoint (Private Use Area)
-  let nextCodepoint = 0xE001;
-  const skippedGlyphs = [];
-
-  // If glyphMeta is provided, the client is sending the full ordered list
-  // with user-defined names and codepoints
-  const allSvgItems = [];
-
-  if (glyphMeta && Array.isArray(glyphMeta) && glyphMeta.length > 0) {
-    // Client controls everything — use glyphMeta order/names/codepoints
-    for (const meta of glyphMeta) {
-      const svgContent = meta.svgContent;
-      if (!svgContent) continue;
-      allSvgItems.push({
-        name: meta.name || 'glyph',
-        codepoint: meta.codepoint || nextCodepoint++,
-        svgContent,
-      });
-    }
-  } else {
-    // Legacy path: auto-assign codepoints
-    if (existingWoffBuffer) {
-      const parsed = parseWoff(existingWoffBuffer);
-      fontName = fontName || parsed.fontFamily || 'CustomFont';
-      for (const g of parsed.glyphs) {
-        if (!g.svgPathData || g.index === 0) continue;
-        const cp = g.unicode || nextCodepoint++;
-        if (cp >= nextCodepoint) nextCodepoint = cp + 1;
-        const unitsPerEm = parsed.unitsPerEm || 1000;
-        const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${unitsPerEm} ${unitsPerEm}">
-  <path d="${g.svgPathData}"/>
-</svg>`;
-        allSvgItems.push({
-          name: g.name,
-          codepoint: cp,
-          svgContent,
-        });
-      }
-    }
-
-    for (const item of svgItems) {
-      allSvgItems.push({
-        name: item.name,
-        codepoint: nextCodepoint++,
-        svgContent: item.svgContent,
-      });
-    }
-  }
-
-  if (allSvgItems.length === 0) {
-    throw new Error('No glyphs to generate. Please add at least one SVG file.');
-  }
-
-  const validSvgItems = [];
-  for (const item of allSvgItems) {
-    try {
-      const normalized = normalizeSvg(item.svgContent);
-      validSvgItems.push({ ...item, svgContent: normalized.svgContent });
-    } catch (error) {
-      skippedGlyphs.push(item.name || 'glyph');
-    }
-  }
-
-  if (validSvgItems.length === 0) {
-    throw new Error('No valid SVG glyphs to generate.');
-  }
-
-  if (skippedGlyphs.length > 0) {
-    console.warn(`Skipped invalid glyphs: ${skippedGlyphs.join(', ')}`);
-  }
-
-  if (allSvgItems.length === 0) {
-    throw new Error('No glyphs to generate. Please add at least one SVG file.');
-  }
-
-  // Step 1: SVGs → SVG Font
-  const svgFontData = await new Promise((resolve, reject) => {
-    const fontStream = new SVGIcons2SVGFontStream({
-      fontName,
-      normalize: true,
-      fontHeight: 1000,
-      log: () => {},
-    });
-
-    let result = '';
-    fontStream.on('data', (chunk) => {
-      result += typeof chunk === 'string' ? chunk : chunk.toString('utf-8');
-    });
-    fontStream.on('end', () => resolve(result));
-    fontStream.on('error', reject);
-
-    for (const item of allSvgItems) {
-      const glyphStream = new Readable({ read() {} });
-      glyphStream.metadata = {
-        name: item.name,
-        unicode: [String.fromCodePoint(item.codepoint)],
-      };
-      glyphStream.push(item.svgContent);
-      glyphStream.push(null);
-      fontStream.write(glyphStream);
-    }
-
-    fontStream.end();
-  });
-
-  // Step 2: SVG Font → TTF
-  const ttfResult = svg2ttf(svgFontData, {});
-  const ttfBuffer = Buffer.from(ttfResult.buffer);
-
-  // Step 3: TTF → WOFF
-  const woffResult = ttf2woff(new Uint8Array(ttfBuffer));
-  return Buffer.from(woffResult.buffer);
 }
 
 // ── API Routes ──────────────────────────────────────────────
@@ -550,6 +349,105 @@ app.get('/api/latest-bundle', (req, res) => {
     console.error('latest-bundle error:', err);
     res.status(500).json({ error: `Failed to read latest bundle: ${err.message}` });
   }
+});
+
+/**
+ * GET /api/repo-fonts
+ * List .woff fonts that live in the repository (for the "which font?" picker).
+ */
+app.get('/api/repo-fonts', (req, res) => {
+  try {
+    res.json({ fonts: discoverFonts(__dirname) });
+  } catch (err) {
+    console.error('repo-fonts error:', err);
+    res.status(500).json({ error: `Failed to list repo fonts: ${err.message}` });
+  }
+});
+
+/**
+ * GET /api/preview-stream
+ * Server-Sent Events stream. Browser tabs subscribe here and receive a
+ * `preview-ready` event whenever a font is pushed for preview. The current
+ * active preview (if any) is replayed immediately on connect.
+ */
+app.get('/api/preview-stream', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+
+  sseClients.push(res);
+  if (activePreview) {
+    res.write(`event: preview-ready\ndata: ${JSON.stringify(activePreview)}\n\n`);
+  }
+
+  const heartbeat = setInterval(() => {
+    try { res.write(': heartbeat\n\n'); } catch (_) { /* closed */ }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients = sseClients.filter((c) => c !== res);
+  });
+});
+
+/**
+ * POST /api/preview-font  { path }
+ * Read + parse a repo .woff and broadcast it to all open tabs.
+ */
+app.post('/api/preview-font', express.json(), (req, res) => {
+  try {
+    const woffPath = expandHome(req.body?.path || '');
+    if (!woffPath) {
+      return res.status(400).json({ error: 'path is required.' });
+    }
+    if (!fs.existsSync(woffPath)) {
+      return res.status(404).json({ error: `Font not found: ${woffPath}` });
+    }
+    const buffer = fs.readFileSync(woffPath);
+    const parsed = parseWoff(buffer);
+    const family = (parsed.fontFamily && parsed.fontFamily !== 'Unknown')
+      ? parsed.fontFamily
+      : path.basename(woffPath, path.extname(woffPath));
+    const result = {
+      fontFamily: family,
+      unitsPerEm: parsed.unitsPerEm,
+      glyphs: parsed.glyphs,
+      sourcePath: woffPath,
+      generatedAt: nowIso(),
+    };
+
+    try {
+      persistLatestBundle(buffer, parsed.glyphs, family);
+    } catch (e) {
+      console.error('Failed to persist preview bundle:', e.message);
+    }
+
+    broadcastPreview(result);
+    return res.json({
+      success: true,
+      family,
+      glyphCount: parsed.glyphs.length,
+      clients: sseClients.length,
+    });
+  } catch (err) {
+    console.error('preview-font error:', err);
+    return res.status(500).json({ error: `Preview failed: ${err.message}` });
+  }
+});
+
+/**
+ * GET /api/active-preview
+ * Bootstrap endpoint: a freshly opened tab fetches the current active preview.
+ */
+app.get('/api/active-preview', (req, res) => {
+  if (!activePreview) {
+    return res.status(404).json({ error: 'No active preview.' });
+  }
+  res.json(activePreview);
 });
 
 

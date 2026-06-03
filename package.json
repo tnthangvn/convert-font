@@ -1,12 +1,19 @@
 {
   "name": "@tnthangvn/woff-tool",
-  "version": "1.0.0",
-  "description": "Internal WOFF font generation tool — load/create WOFF, add SVG glyphs, generate & download",
+  "version": "1.1.0",
+  "description": "WOFF icon-font tool — load/create WOFF, add SVG glyphs, live SSE preview, generate & download. Includes an MCP server.",
   "main": "server.js",
   "packageManager": "pnpm@10.20.0",
   "bin": {
     "woff-tool": "./mcp-server.mjs"
   },
+  "files": [
+    "server.js",
+    "mcp-server.mjs",
+    "lib/",
+    "public/",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -24,6 +31,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "multer": "^1.4.5-lts.1",
@@ -33,11 +41,7 @@
     "ttf2woff": "^3.0.0",
     "zod": "^4.4.3"
   },
-  "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@opendesign/sdk": "^0.4.5"
-  },
   "engines": {
-    "node": "22.x"
+    "node": ">=22"
   }
 }

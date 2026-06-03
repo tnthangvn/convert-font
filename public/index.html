@@ -28,6 +28,10 @@
         <h1 class="header__title">WOFF Tool</h1>
       </div>
       <div class="header__actions">
+        <span class="live-preview" title="Live preview connection" role="status" aria-live="polite">
+          <span id="liveIndicator" class="live-indicator live-indicator--reconnecting" aria-hidden="true"></span>
+          <span id="liveStatusText" class="live-preview__label">Live</span>
+        </span>
         <span class="header__badge">v1</span>
         <button id="themeToggle" class="theme-toggle" type="button" aria-label="Use dark mode" aria-pressed="false">
           <span class="theme-toggle__icon theme-toggle__icon--light" aria-hidden="true">☀</span>
