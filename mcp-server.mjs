@@ -109,20 +109,28 @@ server.registerTool(
 server.registerTool(
   'convert_svg_to_font',
   {
-    description: 'Convert an SVG file OR a folder of SVGs into a brand-new icon font (.woff + .css + metadata.json). Writes outputs to outDir. Does NOT require the web server.',
+    description: 'Convert an SVG file OR a folder of SVGs into a brand-new icon font (.woff + .css + metadata.json). Writes outputs to outDir. Does NOT require the web server. Icons are vectorized (shapes flattened, strokes outlined to black fills) and normalized into a size×size box (default 28×28), contained while preserving aspect ratio.',
     inputSchema: {
       input: z.string().describe('Path to an .svg file or a folder of .svg files'),
       fontName: z.string().optional().describe('Font family name (default: CustomFont)'),
       prefix: z.string().optional().describe('CSS class prefix (default: icon)'),
       outDir: z.string().optional().describe('Output directory (default: data/latest)'),
+      size: z.number().int().positive().optional().describe('Icon box size in px (default 28). The icon is contained inside size×size; the larger side fills the box, the other is auto.'),
+      alignH: z.enum(['left', 'center', 'right']).optional().describe('Horizontal alignment in the box (default: center)'),
+      alignV: z.enum(['top', 'center', 'bottom']).optional().describe('Vertical alignment in the box (default: center)'),
+      vectorize: z.boolean().optional().describe('Flatten shapes & outline strokes to filled paths (default: true)'),
     },
   },
-  async ({ input, fontName = 'CustomFont', prefix = 'icon', outDir }) => {
+  async ({ input, fontName = 'CustomFont', prefix = 'icon', outDir, size, alignH, alignV, vectorize }) => {
     const result = await createFontFromSvgs({
       svgPaths: [resolve(REPO_ROOT, input)],
       fontFamily: fontName,
       prefix,
       cssFontPath: `${fontName}.woff`,
+      ...(size ? { width: size, height: size } : {}),
+      ...(alignH ? { alignH } : {}),
+      ...(alignV ? { alignV } : {}),
+      ...(vectorize === false ? { vectorize: false } : {}),
     });
     const dir = outDir ? resolve(REPO_ROOT, outDir) : LATEST_DIR;
     mkdirSync(dir, { recursive: true });
@@ -147,15 +155,19 @@ server.registerTool(
 server.registerTool(
   'sync_font',
   {
-    description: 'Add SVG icon(s) (a single .svg or a folder) into an EXISTING repo font, sort + reindex, then write the updated .woff and .css back into the repo. Refreshes any open preview tab. Use list_repo_fonts first to pick the font.',
+    description: 'Add SVG icon(s) (a single .svg or a folder) into an EXISTING repo font, sort + reindex, then write the updated .woff and .css back into the repo. Refreshes any open preview tab. Use list_repo_fonts first to pick the font. New icons are vectorized (shapes flattened, strokes outlined to black fills) and normalized into a size×size box (default 28×28), contained while preserving aspect ratio.',
     inputSchema: {
       font: z.string().describe('Repo font: a .woff path or a font family name (from list_repo_fonts)'),
       input: z.string().describe('Path to an .svg file or a folder of .svg files to add'),
       prefix: z.string().optional().describe('CSS class prefix (default: detected from CSS, else rvi)'),
       update: z.boolean().optional().describe('Replace icons of the same name instead of adding new ones'),
+      size: z.number().int().positive().optional().describe('Icon box size in px (default 28). The icon is contained inside size×size; the larger side fills the box, the other is auto.'),
+      alignH: z.enum(['left', 'center', 'right']).optional().describe('Horizontal alignment in the box (default: center)'),
+      alignV: z.enum(['top', 'center', 'bottom']).optional().describe('Vertical alignment in the box (default: center)'),
+      vectorize: z.boolean().optional().describe('Flatten shapes & outline strokes to filled paths (default: true)'),
     },
   },
-  async ({ font, input, prefix, update }) => {
+  async ({ font, input, prefix, update, size, alignH, alignV, vectorize }) => {
     const target = resolveFont(font);
     if (!target) {
       const available = discoverFonts(REPO_ROOT).map((f) => f.family);
@@ -167,6 +179,10 @@ server.registerTool(
       cssPath: target.cssPath,
       prefix,
       update: !!update,
+      ...(size ? { width: size, height: size } : {}),
+      ...(alignH ? { alignH } : {}),
+      ...(alignV ? { alignV } : {}),
+      ...(vectorize === false ? { vectorize: false } : {}),
     });
     writeFileSync(target.woffPath, result.woffBuffer);
     if (result.cssText != null && target.cssPath) {

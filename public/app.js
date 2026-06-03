@@ -228,10 +228,6 @@
     state.syncCssPath = syncCssPath;
   }
 
-  function escapeHtml(text) {
-    return String(text).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-  }
-
   function setSyncStatus(message, isError = false) {
     state.syncStatus = { message, isError };
     if (statusText) statusText.textContent = message;
@@ -250,13 +246,6 @@
     return name && name !== 'glyph' ? name : 'CustomFont';
   }
 
-  function updateFontNameFromFile(file) {
-    const nextName = deriveFontNameFromFile(file);
-    state.fontName = nextName;
-    if (fontNameInput) fontNameInput.value = nextName;
-    if (fontNameDisplay) fontNameDisplay.textContent = nextName;
-  }
-
   function normalizeSyncPathInput() {
     if (!syncPathInput) return;
     const value = syncPathInput.value.trim();
@@ -273,33 +262,12 @@
     return btoa(binary);
   }
 
-  function downloadBlob(blob, filename, mimeType = 'font/woff') {
-    const url = URL.createObjectURL(new Blob([blob], { type: mimeType }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-
   function setBusy(button, busy, label) {
     if (!button) return;
     button.disabled = busy;
     if (label !== undefined) button.dataset.originalLabel = button.dataset.originalLabel || button.innerHTML;
     if (busy && label) button.innerHTML = label;
     if (!busy && button.dataset.originalLabel) button.innerHTML = button.dataset.originalLabel;
-  }
-
-  function toast(message, isError = false) {
-    if (statusText) statusText.textContent = message;
-    if (statusBar) {
-      statusBar.classList.toggle('status-bar--done', !isError);
-      show(statusBar);
-    }
-    if (isError) showError(message);
-    else hideError();
   }
 
   function codepointToHex(cp) {

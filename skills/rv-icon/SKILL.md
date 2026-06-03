@@ -1,9 +1,12 @@
 ---
 name: rv-icon
-description: Use this skill when the user asks to add or update SVG icons in an existing icon font (.woff). Automates reading a local SVG, normalizing the icon name with rvi- kebab-case prefix, resolving duplicates, importing/updating the icon (resized to 28×28 centered), sorting icons by name, reindexing all glyphs, exporting the updated .woff, generating CSS, and syncing results back.
+description: CLI skill to add or update SVG icon(s) in an existing icon font (.woff). Reads a local SVG file or folder, vectorizes it (shapes flattened, strokes outlined to black fills), normalizes to the 28×28 contain standard, derives an rvi- kebab-case name (resolving duplicates), sorts glyphs by name, reindexes codepoints from 0xE001, and writes the updated .woff + .css back to disk. HTTP-free — no server required. For the MCP-based workflow (convert/sync/preview), see the woff-tool skill.
 ---
 
-# Icon Font Management Skill
+# Icon Font Management Skill (CLI)
+
+> Prefer the **woff-tool** MCP skill for agent-driven convert/sync/preview. This
+> skill is the standalone CLI for adding/updating icons in a single `.woff`.
 
 ## When to Use
 
@@ -17,29 +20,29 @@ Trigger this skill when the user issues commands like:
 ## Prerequisites
 
 - The WOFF Tool project must be at `/var/www/free-time/convert-font`
-- Node.js 18+ must be available (for native `fetch()`)
-- The WOFF Tool server may or may not be running — the script will auto-start it
+- Node.js 22+
+- **No server required** — the script runs the pipeline directly from `lib/`
 
 ## How It Works
 
-This skill uses a Node.js CLI script that calls the WOFF Tool server APIs directly
-(same APIs the browser UI uses). No browser automation required for the core workflow.
+The CLI delegates to `lib/icon-pipeline.js` (`addIconsToFont`) — the same HTTP-free
+core used by the MCP server. No browser, no running web server.
 
 The **font file is dynamic** — the user provides the `.woff` path. The font family
 name is derived from the filename (e.g. `RV-Icon.woff` → font family `RV-Icon`).
+The `<svg-path>` may be a single `.svg` **or a folder** of `.svg` files (batch).
 
 **Pipeline:**
-1. Read and validate SVG from local workspace
-2. Derive icon name: filename → kebab-case → `rvi-` prefix → duplicate resolution
-3. Parse existing `.woff` via server API
-4. Normalize SVG to 28×28 center-center via server API
-5. Add/replace the icon in the glyph list
+1. Read and validate the SVG file(s)
+2. Vectorize — flatten `<rect>/<circle>/…` and outline strokes into black filled paths
+3. Derive icon name: filename → kebab-case → `rvi-` prefix → duplicate resolution
+4. Normalize to the 28×28 contain standard (centered, aspect-preserved)
+5. Add (or replace, in `update` mode) the icon in the glyph list
 6. Sort all glyphs alphabetically by name
-7. Reindex all codepoints sequentially from `E001`
-8. Generate updated `.woff` via server API
-9. Generate CSS via server API
-10. Preserve manually-maintained emoji alias header in CSS (if present)
-11. Write output files back to workspace
+7. Reindex all codepoints sequentially from `0xE001`
+8. Generate the updated `.woff`
+9. Path-aware merge of the CSS (`mergeCssText` preserves manual/emoji blocks)
+10. Write the `.woff` + `.css` back to disk in place
 
 ## Instructions
 
@@ -82,25 +85,25 @@ The script outputs a JSON result on stdout and progress logs on stderr.
 
 ### Step 4: Report Results
 
-Parse the JSON output and report to the user:
+Parse the JSON output and report to the user. The result shape is:
 
-**On success:**
+```json
+{
+  "success": true,
+  "action": "add",
+  "source": "/abs/path/star.svg",
+  "prefix": "rvi",
+  "addedIcons": [{ "name": "star", "cssClass": ".rvi-star:before", "codepoint": "e067" }],
+  "skipped": [],
+  "totalGlyphs": 124,
+  "updatedFiles": ["/abs/.../RV-Icon.woff", "/abs/.../icon.css"]
+}
 ```
-✅ Icon successfully <added/updated>!
 
-- Icon name: rvi-<name>
-- CSS class: .rvi-<name>:before
-- Codepoint: e0XX
-- Total glyphs: N
-- Updated files:
-  - <woff-path>
-  - <css-path>
-```
+> Glyph names are stored **without** the prefix (`star`); the prefix is applied
+> only in the CSS selector (`.rvi-star`).
 
-**On failure:**
-```
-❌ Failed to <add/update> icon: <error message>
-```
+**On failure:** `{ "success": false, "error": "<message>" }`
 
 ### Step 5: Visual Verification via chrome-devtools MCP
 
@@ -152,13 +155,11 @@ The script will fail clearly in these situations:
 
 | Error | Cause |
 |-------|-------|
-| SVG file not found | Invalid SVG path |
-| Not a valid SVG | File doesn't contain `<svg>` tag |
-| .woff file path is required | Missing woff-path argument |
-| Existing .woff not found | Provided .woff doesn't exist |
-| Server start failed | Cannot start WOFF Tool server |
-| Icon not found (update) | Target icon name doesn't exist in font |
-| Parse/normalize/generate failed | Server API returned an error |
+| SVG path not found | Invalid SVG file/folder path |
+| No SVG files found in the provided input | Empty folder / no `.svg` |
+| `.woff` file path is required | Missing woff-path argument |
+| Existing `.woff` not found | Provided `.woff` doesn't exist |
+| No valid SVG icons to add/update | All inputs were skipped (invalid/unreadable) |
 
 All errors are returned as JSON: `{ "success": false, "error": "..." }`
 
@@ -177,9 +178,10 @@ Expected output:
 {
   "success": true,
   "action": "add",
-  "iconName": "rvi-star",
-  "cssClass": ".rvi-star:before",
-  "codepoint": "e067",
+  "source": "/absolute/path/assets/icons/star.svg",
+  "prefix": "rvi",
+  "addedIcons": [{ "name": "star", "cssClass": ".rvi-star:before", "codepoint": "e067" }],
+  "skipped": [],
   "totalGlyphs": 124,
   "updatedFiles": [
     "/absolute/path/public/fonts/RV-Icon.woff",
@@ -187,6 +189,8 @@ Expected output:
   ]
 }
 ```
+
+You can also pass a **folder** instead of a single file to batch-add every `.svg` in it.
 
 ### Update an Existing Icon
 
