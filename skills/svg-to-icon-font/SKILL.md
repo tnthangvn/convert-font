@@ -1,17 +1,47 @@
 ---
 name: svg-to-icon-font
 description: >-
-  End-to-end guide for turning SVG icons into a portable icon webfont (.woff +
-  .css) that drops into ANY project. Use this whenever the user wants to convert
-  SVGs into an icon font — phrases like "convert these svgs to an icon font",
-  "make a webfont from this folder of icons", "turn my svg icons into a .woff",
-  "build an icon font I can use across my projects", "generate icon-font CSS from
-  these svgs", or "I have a bunch of svg icons, how do I use them as a font". This
-  skill picks the right conversion method (MCP, Node CLI/library, or browser UI),
-  runs it, and shows how to consume the generated font in any HTML/React/Vue app.
-  It is method-agnostic and font-agnostic — works for any font name and prefix,
-  not just RV-Icon. For the MCP-only workflow see the woff-tool skill; for
-  adding/updating a single icon in an existing font see the rv-icon skill.
+  Turn SVG icons into a portable icon webfont (.woff + .css) for ANY project, and
+  route SVG icons — including ones exported from Figma or produced during
+  design-to-code — into a project's EXISTING icon font instead of inlining them.
+  Trigger whenever the intent is for SVGs to BECOME font glyphs, e.g. "convert
+  these svgs to an icon font", "make a webfont from this folder of icons", "turn
+  my svg icons into a .woff", "add these icons to our icon font", "sync the Figma
+  icons into <font>", "use these icons as a font instead of inline svg", "generate
+  icon-font CSS from these svgs", or "build an icon font I can reuse across
+  projects". Also trigger when implementing icons in a project that already ships
+  an icon font (a .woff + prefixed CSS) and new icons should be added there rather
+  than as inline <svg>. DISTINGUISH — do NOT trigger for: rendering a one-off
+  inline SVG, logos, illustrations, multicolor or decorative graphics, or any case
+  where inline SVG is the intended output. Icon fonts are for monochrome,
+  single-glyph icon SETS that font-size/color should control. Method- and
+  font-agnostic (any name/prefix, not just RV-Icon); preserves an existing font's
+  prefix when extending. For the MCP-only workflow see the woff-tool skill; for
+  the single-icon CLI see the rv-icon skill.
+triggers:
+  [
+    'svg to font',
+    'svg to icon font',
+    'convert svg to font',
+    'convert svgs to icon font',
+    'icon font',
+    'icon webfont',
+    'make a webfont',
+    'svg to woff',
+    'generate icon font',
+    'generate icon-font css',
+    'add icon to font',
+    'add icons to icon font',
+    'sync icons into font',
+    'icons as a font',
+    'use icons as font instead of inline svg',
+    'figma icons to font',
+    'add figma icons to icon font',
+    'extend icon font',
+    'build icon font',
+  ]
+priority: high
+version: 1.0.0
 ---
 
 # SVG → Icon Font
