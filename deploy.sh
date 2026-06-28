@@ -7,6 +7,10 @@
 # Bumps the version, runs tests, commits the bump + tag, pushes to origin,
 # and publishes to npm. Run it on a clean `main` working tree.
 #
+# 2FA: if your npm account requires a one-time password, either run this from
+# an interactive terminal (npm will prompt) or pass it via the NPM_OTP env var:
+#   NPM_OTP=123456 ./deploy.sh patch
+#
 # Notes:
 # - Uses the git author from .git/config as-is (npm version commits with it).
 #   This script never touches git config or rewrites authorship.
@@ -56,7 +60,11 @@ git push origin HEAD --follow-tags
 
 # --- Publish -----------------------------------------------------------------
 echo "▶ Publishing to npm…"
-npm publish
+if [ -n "${NPM_OTP:-}" ]; then
+  npm publish --otp "$NPM_OTP"
+else
+  npm publish
+fi
 
 NAME="$(node -p "require('./package.json').name")"
 VER="$(node -p "require('./package.json').version")"
