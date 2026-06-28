@@ -1,0 +1,28 @@
+@font-face {
+  font-family: 'MyFont';
+  src: url('MyFont.woff?mqxujlwe') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+[class^='mi-'],
+[class*=' mi-'] {
+  font-family: 'MyFont' !important;
+  speak: never;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mi-filled-heart:before {
+  content: '\e001';
+}
+
+.mi-star:before {
+  content: '\e002';
+}

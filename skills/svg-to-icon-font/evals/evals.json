@@ -1,0 +1,45 @@
+{
+  "skill_name": "svg-to-icon-font",
+  "evals": [
+    {
+      "id": 0,
+      "name": "folder-to-webfont",
+      "prompt": "I have a folder of SVG icons at /var/www/convert-font/skills/svg-to-icon-font/evals/inputs/iconset (a mix of filled and outline/stroke styles). Turn the whole folder into an icon webfont I can use on my website, and explain how to drop it into a project. Save the generated font into the outputs directory you were given.",
+      "files": ["evals/inputs/iconset/"],
+      "assertions": [
+        "A .woff font file was produced",
+        "Font has exactly 3 real glyphs",
+        "Outline/stroke icon is non-empty (strokes were outlined to fills)",
+        "CSS contains an @font-face rule",
+        "CSS has 3 per-icon :before rules",
+        "answer.md explains usage (url() path + class)"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "single-svg-react-usage",
+      "prompt": "Here's a single icon: /var/www/convert-font/skills/svg-to-icon-font/evals/inputs/star.svg. Make it into an icon font called AppIcons and show me the exact HTML/CSS to render the star at 32px in red in my React app. Save the font into the outputs directory you were given.",
+      "files": ["evals/inputs/star.svg"],
+      "assertions": [
+        "An AppIcons.woff font was produced",
+        "Font has exactly 1 real glyph (the star)",
+        "CSS contains @font-face",
+        "answer.md shows React usage at 32px in red",
+        "answer.md references the actual generated class name"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "add-to-existing-font",
+      "prompt": "Add the icon /var/www/convert-font/skills/svg-to-icon-font/evals/inputs/existing/bell.svg to my EXISTING icon font, which is the MyFont.woff already in your outputs directory (with its MyFont.css). Don't create a new font — extend that one in place, then tell me the new icon's class name.",
+      "files": ["evals/inputs/existing/bell.svg"],
+      "assertions": [
+        "MyFont.woff now has 3 glyphs (was 2 + bell)",
+        "Existing mi- prefix preserved (NOT switched to rvi-)",
+        "CSS has a .mi-bell rule",
+        "bell glyph carries real (outlined) path data",
+        "answer.md states the new class .mi-bell"
+      ]
+    }
+  ]
+}
