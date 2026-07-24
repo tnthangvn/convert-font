@@ -41,7 +41,7 @@ triggers:
     'build icon font',
   ]
 priority: high
-version: 1.0.0
+version: 1.1.0
 ---
 
 # SVG → Icon Font
@@ -114,15 +114,57 @@ convert_svg_to_font({
 Writes `dist/fonts/MyIcons.woff` + `.css` + `metadata.json`; returns the paths and
 a glyph summary (`added`, `skipped`, `glyphCount`).
 
-**Add/update icons in an existing repo font** — `sync_font`. Always
-`list_repo_fonts` first; if more than one font exists, ask which with
-`AskUserQuestion`; if exactly one, use it. `sync_font` sorts glyphs by name and
-reindexes codepoints from `0xE001`, then writes `.woff` + `.css` back. The `.css` is
-**path-aware merged**, not overwritten — any manual/hand-authored CSS blocks you
-added (e.g. emoji aliases) are preserved; only the managed glyph rules are updated.
-It requires the target `.woff` to already exist — to create from scratch use
-`convert_svg_to_font`. For the full MCP workflow (including `preview_font`), defer
-to the **woff-tool** skill.
+**Add/update icons in an existing repo font** — `sync_font`. It requires the target
+`.woff` to already exist (create-from-scratch is `convert_svg_to_font`). `sync_font`
+sorts glyphs by name and **reindexes every codepoint from `0xE001`**, then writes the
+`.woff` and — *when it can locate the paired stylesheet* — the `.css`. For the full
+MCP workflow (including `preview_font`), defer to the **woff-tool** skill.
+
+> ⚠️ **The MCP server is rooted at its own package dir, not your repo.** So:
+> 1. **Never call `sync_font` with a family name** for a real project — `list_repo_fonts`
+>    reports the server's *bundled* fonts (it ships its own `RV-Icon`!), and syncing by
+>    name writes into the npm cache (`~/.npm/_npx/**`), not your repo. Always pass
+>    `font:` as the **absolute `.woff` path inside the target repo**.
+> 2. **Read the result before trusting it.** Confirm `wroteWoff` is your repo path and
+>    `wroteCss` is **non-null**. `sync_font` only rewrites the `.css` if it sits at the
+>    server's expected paired path (`<root>/public/icon.css` next to the woff). Projects
+>    that keep the stylesheet elsewhere (e.g. `public/assets/icon.css`) get
+>    **`wroteCss: null`** — the `.woff` gains the new glyphs but the `.css` is left
+>    **stale and now desynced** (the reindex shifted every existing codepoint).
+> 3. **If `wroteCss` is null → regenerate the css by glyph NAME**, never by codepoint.
+>    See "Recovering a desynced css" below. The `.css` is *not* smart-merged in this
+>    case; you must remap it yourself.
+
+### Recovering a desynced css (reindex remap)
+
+When `sync_font` reindexed the `.woff` but did **not** rewrite your project's `.css`,
+the fix is a **name-based remap**, not appending two lines. The reindex is alphabetical,
+so nearly every existing codepoint moved — but glyph **names** are stable. Rebuild the
+css by translating each `\eXXXX` through *old-codepoint → name → new-codepoint*, which
+preserves all hand-authored aliases and emoji blocks (they carry no `\e` token, so they
+pass through untouched), then append the new classes. Needs the pre-sync `.woff`
+(`git show HEAD:path` works) and `fonttools`:
+
+```python
+import re
+from fontTools.ttLib import TTFont
+old = TTFont("OLD.woff").getBestCmap()          # cp -> name  (pre-sync, e.g. from git)
+new = TTFont("NEW.woff").getBestCmap()          # cp -> name  (post-sync, in repo)
+name2new = {n: cp for cp, n in new.items()}
+oldcp2name = {cp: n for cp, n in old.items()}
+css = open("path/to/icon.css", encoding="utf-8").read()
+css = re.sub(r"\\([ef][0-9a-fA-F]{3})",
+             lambda m: "\\%x" % name2new[oldcp2name[int(m.group(1), 16)]], css)
+# then append the new glyphs' classes, e.g.:
+for cls, glyph in [("verified", "verified"), ("no-entry", "no-entry")]:
+    css += "\n.%s%s:before {\n  content: '\\%x';\n}\n" % (PREFIX, cls, name2new[glyph])
+open("path/to/icon.css", "w", encoding="utf-8").write(css)
+```
+
+**Verify before done:** the set of distinct `\e` tokens in the css must equal the woff
+glyph count, with zero tokens absent from the woff cmap. This whole hazard disappears if
+the project keeps its `.css` at the server's paired path so `sync_font` writes both
+atomically — prefer fixing the pairing over remapping when you control the layout.
 
 ---
 

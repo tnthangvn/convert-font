@@ -33,7 +33,7 @@ Override with `size` / `alignH` / `alignV`, or disable vectorization with
 |------|---------------|---------|
 | `list_repo_fonts` | No | List `.woff` fonts in the repo + their CSS. Use to pick the target font. |
 | `convert_svg_to_font` | No | SVG file **or folder** → brand-new `.woff` + `.css` + `metadata.json`. |
-| `sync_font` | No | Add/update icon(s) into an **existing** repo font; writes `.woff` + `.css` back. |
+| `sync_font` | No | Add/update icon(s) into an **existing** font; writes `.woff` back + `.css` **if paired** (check `wroteCss`). |
 | `preview_font` | **Yes** | Push a repo font to the open `http://localhost:3456` tab. |
 
 ## Workflows
@@ -63,16 +63,31 @@ For "add icon X to <font>" or "sync <folder> into <font>":
 2. **Sync:**
    ```
    sync_font({
-     font: "RV-Icon",           // family name or .woff path from list_repo_fonts
+     font: "/abs/path/to/repo/public/fonts/RV-Icon.woff",  // see warning below
      input: "assets/star.svg",  // .svg file or folder
      update: false              // true = replace same-named icons instead of adding
      // size, alignH, alignV, vectorize optional
    })
    ```
    This vectorizes + normalizes the new icon(s), **sorts all glyphs by name**,
-   **reindexes codepoints from `0xE001`**, and writes the updated `.woff` + `.css`
-   back into the repo. If the web server is running, open tabs refresh automatically.
-3. **Report** `added`, `skipped`, `totalGlyphs`, and the files written.
+   **reindexes codepoints from `0xE001`**, and writes the updated `.woff` — plus the
+   `.css` **only if it can locate the paired stylesheet**. If the web server is
+   running, open tabs refresh automatically.
+3. **Report** `added`, `skipped`, `totalGlyphs`, `wroteWoff`, `wroteCss`.
+
+> ⚠️ **This MCP server is rooted at its own install dir, not the caller's project.**
+> When driving a *different* repo (the common case), two things bite:
+> - **Pass `font:` as the absolute `.woff` path in the target repo — not a family name.**
+>   `list_repo_fonts` enumerates *this server's* fonts (it ships a bundled `RV-Icon`),
+>   so `font: "RV-Icon"` syncs into the server's own copy under `~/.npm/_npx/**`, never
+>   the caller's file. `list_repo_fonts` is only trustworthy when the server root **is**
+>   the project.
+> - **`wroteCss` can come back `null`.** `sync_font` writes the `.css` only when it sits
+>   at the paired path next to the woff (`<root>/public/icon.css`). A project whose
+>   stylesheet lives elsewhere (e.g. `public/assets/icon.css`) gets the new glyphs in the
+>   `.woff` but a **stale, now-desynced `.css`** — the reindex moved every codepoint. In
+>   that case regenerate the css by glyph **name** (old→name→new remap); see the
+>   *Recovering a desynced css* section in the `svg-to-icon-font` skill.
 
 ### 3. Live preview a font
 
@@ -88,8 +103,10 @@ If the server is down the tool returns an actionable error — start it with
 
 ## Rules
 
-- **Always `list_repo_fonts` before `sync_font`/`preview_font`** so you reference a
-  real font, and only ask the user to choose when there is more than one.
+- **Driving another repo? Target it by absolute `.woff` path, not `list_repo_fonts`.**
+  `list_repo_fonts`/family names resolve against *this server's* install dir, so they
+  only apply when the server root is the project itself. Always verify `wroteWoff` in
+  the result points at the intended file.
 - **Don't pass `size` unless the user asked for a specific size** — the 28×28
   contain standard is the default and is what produces consistent icons.
 - **`sync_font` requires the target `.woff` to already exist.** To create a font
